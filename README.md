@@ -59,30 +59,34 @@ $ pnpm run test:cov
 
 ## Local Database
 
-This API uses Prisma 6 against a PostgreSQL 16 instance managed by Docker
-Compose at the **monorepo root** (`../docker-compose.yml`). The service is
-already wired with `vivaidea/vivaidea` credentials and auto-seeds the schema
-from `../database-design.sql` on first boot.
+This API uses **TypeORM** against a **MySQL 8** instance managed by Docker
+Compose at the **monorepo root** (`../docker-compose.yml`). Connection
+settings live in `.env` and default to `vivaidea/vivaidea` on `localhost:3307`.
 
 ```bash
 # from the monorepo root
-docker compose up -d postgres
+docker compose up -d mysql
 docker compose ps        # wait until "healthy"
 
 # from this API directory
-pnpm exec prisma generate       # already done after pnpm install
-pnpm prisma:migrate --name init # creates the `ideas` table
 pnpm start:dev
 ```
 
-Reset everything (wipe the volume and re-seed):
+Tables are auto-created from entities on startup (`DB_SYNCHRONIZE=true`).
+This is fine for local development — for production, set
+`DB_SYNCHRONIZE=false` and use TypeORM migrations:
 
 ```bash
-docker compose down -v && docker compose up -d postgres
+pnpm typeorm migration:generate src/database/migrations/<Name>
+pnpm typeorm migration:run
+pnpm schema:log        # see the SQL TypeORM would apply
 ```
 
-The connection string lives in `.env` and matches the compose credentials
-— `postgresql://vivaidea:vivaidea@localhost:5432/vivaidea?schema=public`.
+Reset everything (wipe the volume and re-init):
+
+```bash
+docker compose down -v && docker compose up -d mysql
+```
 
 ## API Documentation
 

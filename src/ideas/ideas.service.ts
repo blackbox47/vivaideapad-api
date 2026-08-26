@@ -1,57 +1,45 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateIdeaDto, UpdateIdeaDto } from './dto/ideas.dto';
-import type { Idea } from '@prisma/client';
+import { Idea } from './idea.entity';
 
 @Injectable()
 export class IdeasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(Idea)
+    private readonly ideas: Repository<Idea>,
+  ) {}
 
-  async findAll(): Promise<Idea[]> {
-    return this.prisma.idea.findMany({ orderBy: { createdAt: 'desc' } });
+  findAll(): Promise<Idea[]> {
+    return this.ideas.find({ order: { createdAt: 'DESC' } });
   }
 
   async findOne(id: string): Promise<Idea> {
-    const idea = await this.prisma.idea.findUnique({ where: { id } });
+    const idea = await this.ideas.findOne({ where: { id } });
     if (!idea) {
       throw new NotFoundException(`Idea #${id} not found`);
     }
     return idea;
   }
 
-  async create(input: CreateIdeaDto): Promise<Idea> {
-    return this.prisma.idea.create({ data: input });
+  create(input: CreateIdeaDto): Promise<Idea> {
+    const entity = this.ideas.create(input);
+    return this.ideas.save(entity);
   }
 
   async update(id: string, input: UpdateIdeaDto): Promise<Idea> {
-    try {
-      return await this.prisma.idea.update({ where: { id }, data: input });
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === 'P2025'
-      ) {
-        throw new NotFoundException(`Idea #${id} not found`);
-      }
-      throw error;
+    const idea = await this.ideas.preload({ id, ...input });
+    if (!idea) {
+      throw new NotFoundException(`Idea #${id} not found`);
     }
+    return this.ideas.save(idea);
   }
 
   async remove(id: string): Promise<void> {
-    try {
-      await this.prisma.idea.delete({ where: { id } });
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === 'P2025'
-      ) {
-        throw new NotFoundException(`Idea #${id} not found`);
-      }
-      throw error;
+    const result = await this.ideas.delete({ id });
+    if (!result.affected) {
+      throw new NotFoundException(`Idea #${id} not found`);
     }
   }
 }
