@@ -1,6 +1,5 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Idea } from '../ideas/idea.entity';
 
 @Global()
 @Module({
@@ -12,12 +11,11 @@ import { Idea } from '../ideas/idea.entity';
       username: process.env.DB_USERNAME ?? 'vivaidea',
       password: process.env.DB_PASSWORD ?? 'vivaidea',
       database: process.env.DB_NAME ?? 'vivaidea',
-      entities: [Idea],
-      // Auto-create/alter tables from entities. Fine for prototyping
-      // because this DB is local-only and not shared. For multi-developer
-      // or production environments, set DB_SYNCHRONIZE=false and use
-      // migrations via `pnpm schema:sync` / `pnpm typeorm migration:run`.
-      synchronize: (process.env.DB_SYNCHRONIZE ?? 'true') === 'true',
+      autoLoadEntities: true,
+      // Schema is owned by migrations. Set DB_SYNCHRONIZE=true only in
+      // throwaway dev sandboxes; the real dev/prod workflow is
+      // `pnpm migration:run`.
+      synchronize: (process.env.DB_SYNCHRONIZE ?? 'false') === 'true',
       charset: 'utf8mb4',
       timezone: 'Z',
       logging: ['error', 'warn'],
