@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { Idea } from '../ideas/idea.entity';
 
 export const AppDataSource = new DataSource({
   type: 'mysql',
@@ -9,7 +8,8 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME ?? 'vivaidea',
   password: process.env.DB_PASSWORD ?? 'vivaidea',
   database: process.env.DB_NAME ?? 'vivaidea',
-  entities: [Idea],
+  entities: [__dirname + '/../**/*.entity.{ts,js}'],
+  migrations: [__dirname + '/migrations/*.{ts,js}'],
   synchronize: false,
   charset: 'utf8mb4',
   timezone: 'Z',
