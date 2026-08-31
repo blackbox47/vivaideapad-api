@@ -41,6 +41,16 @@ export const EnvSchema = z.object({
   UPLOAD_DIR: z.string().min(1).default('./uploads'),
   UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10_485_760),
   UPLOAD_PUBLIC_PREFIX: z.string().min(1).default('/api/v1/uploads/files'),
+
+  // Cookie auth — access/refresh are HttpOnly, session hint is JS-readable.
+  COOKIE_DOMAIN: z.string().default(''),
+  COOKIE_SECURE: z
+    .union([z.literal('true'), z.literal('false')])
+    .default('false'),
+  COOKIE_SAMESITE: z.enum(['lax', 'strict']).default('lax'),
+  ACCESS_COOKIE_NAME: z.string().default('vivaideapad.access'),
+  REFRESH_COOKIE_NAME: z.string().default('vivaideapad.refresh'),
+  SESSION_COOKIE_NAME: z.string().default('vivaideapad.session'),
 });
 
 export type AppEnv = z.infer<typeof EnvSchema>;

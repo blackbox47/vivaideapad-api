@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Notification } from '../notifications/notification.entity';
 import { UsersService } from '../../users/users.service';
 import { User, USER_ROLES } from '../../users/entities/user.entity';
 import { Application, ApplicationStatus } from './application.entity';
@@ -162,7 +163,9 @@ export class ApplicationsService {
   }): Promise<SerializedApplication> {
     const { id, actorId, body } = input;
 
-    return this.dataSource.transaction(async (manager) => {
+    let savedNotification: Notification | null = null;
+
+    const result = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Application);
       const found = await repo.findOne({
         where: { id, deletedAt: IsNull() },
@@ -214,7 +217,7 @@ export class ApplicationsService {
         },
       });
 
-      await this.notify.emit(manager, {
+      savedNotification = await this.notify.emit(manager, {
         recipientId: found.userId,
         type: 'application_decision',
         title: titleForDecision(body.decision),
@@ -226,6 +229,11 @@ export class ApplicationsService {
 
       return toSerialized(saved);
     });
+
+    if (savedNotification) {
+      this.notify.publishCreated(savedNotification);
+    }
+    return result;
   }
 
   async softDelete(id: string): Promise<void> {

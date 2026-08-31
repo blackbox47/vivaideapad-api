@@ -3,12 +3,16 @@ import {
   Controller,
   Delete,
   Get,
+  MessageEvent,
   Param,
   Post,
   Query,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Observable, interval, merge } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
@@ -21,6 +25,7 @@ import {
 import { JwtAccessGuard } from '../../auth/guards/jwt-access.guard';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AdminNotificationsService } from './admin-notifications.service';
+import { NotificationsStreamService } from './notifications-stream.service';
 import { USER_ROLES, isUserRole } from '../../users/entities/user.entity';
 
 const ListQuerySchema = z.object({
@@ -63,7 +68,30 @@ class BroadcastDto extends createZodDto(BroadcastSchema) {}
 @Roles(USER_ROLES.ADMINISTRATOR)
 @Controller('admin/notifications')
 export class AdminNotificationsController {
-  constructor(private readonly notifications: AdminNotificationsService) {}
+  constructor(
+    private readonly notifications: AdminNotificationsService,
+    private readonly stream: NotificationsStreamService,
+  ) {}
+
+  @Get('notifications/stream')
+  @Sse()
+  @ApiOperation({
+    summary: 'Subscribe to admin notification events (Server-Sent Events)',
+  })
+  streamAdmin(@CurrentUser() actor: { id: string }): Observable<MessageEvent> {
+    const data$ = this.stream.subscribe(actor.id);
+    // 15s heartbeat keeps proxies from dropping idle connections.
+    const heartbeat$ = interval(15_000).pipe(
+      map(
+        () =>
+          ({
+            type: 'ping',
+            data: '',
+          }) satisfies MessageEvent,
+      ),
+    );
+    return merge(data$, heartbeat$);
+  }
 
   @Get()
   @ApiOperation({ summary: 'SPA-orphan admin notifications inbox' })

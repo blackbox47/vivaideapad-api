@@ -106,12 +106,12 @@ async function seed(): Promise<void> {
         title: 'Sample concept',
         brief: 'A starter concept to validate the workflow end-to-end.',
         rewardBudget: '1000.00',
-        status: 'published',
+        status: 'active',
         metadata: { tags: ['starter'] },
         openDate: new Date(),
       });
       await conceptRepo.save(row);
-      console.log('  ✓ concept "Sample concept" published');
+      console.log('  ✓ concept "Sample concept" active');
     } else {
       console.log('  ↻ concept "Sample concept" already exists');
     }

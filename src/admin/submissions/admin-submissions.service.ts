@@ -5,6 +5,7 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Notification } from '../notifications/notification.entity';
 import { WalletService } from '../../contributor/wallet.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 import {
@@ -96,7 +97,9 @@ export class AdminSubmissionsService {
   }): Promise<SerializedAdminSubmission> {
     const { id, actorId, body } = input;
 
-    return this.dataSource.transaction(async (manager) => {
+    let savedNotification: Notification | null = null;
+
+    const result = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Submission);
       const found = await repo.findOne({
         where: { id, deletedAt: IsNull() },
@@ -174,7 +177,7 @@ export class AdminSubmissionsService {
         },
       });
 
-      await this.notify.emit(manager, {
+      savedNotification = await this.notify.emit(manager, {
         recipientId: found.userId,
         type:
           body.decision === 'request_changes'
@@ -193,6 +196,11 @@ export class AdminSubmissionsService {
 
       return toSerialized(saved);
     });
+
+    if (savedNotification) {
+      this.notify.publishCreated(savedNotification);
+    }
+    return result;
   }
 
   async riskScan(input: {

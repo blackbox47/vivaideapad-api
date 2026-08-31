@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Notification } from '../notifications/notification.entity';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/users.service';
 import {
@@ -125,6 +126,7 @@ export class AdminUsersService {
     if (!found) throw ApiException.notFound('User');
     const previous = found.accessStatus;
 
+    let savedNotification: Notification | null = null;
     await this.dataSource.transaction(async (manager) => {
       await manager
         .getRepository(User)
@@ -141,7 +143,7 @@ export class AdminUsersService {
           reason: input.body.reason ?? null,
         },
       });
-      await this.notify.emit(manager, {
+      savedNotification = await this.notify.emit(manager, {
         recipientId: input.id,
         type: 'access_status_changed',
         title: titleForAccessStatus(input.body.access_status),
@@ -154,6 +156,10 @@ export class AdminUsersService {
         },
       });
     });
+
+    if (savedNotification) {
+      this.notify.publishCreated(savedNotification);
+    }
 
     const updated = await this.usersService.findById(input.id);
     if (!updated) throw ApiException.notFound('User');
@@ -169,6 +175,7 @@ export class AdminUsersService {
     if (!found) throw ApiException.notFound('User');
     const previous = found.role;
 
+    let savedNotification: Notification | null = null;
     await this.dataSource.transaction(async (manager) => {
       await manager
         .getRepository(User)
@@ -188,7 +195,7 @@ export class AdminUsersService {
       // Notify user only if the role change is material; skipping notify for
       // self-initiated administrative housekeeping would be confusing.
       if (input.actorId !== input.id) {
-        await this.notify.emit(manager, {
+        savedNotification = await this.notify.emit(manager, {
           recipientId: input.id,
           type: 'system',
           title: `Your role has been updated to ${input.body.role}`,
@@ -199,6 +206,10 @@ export class AdminUsersService {
         });
       }
     });
+
+    if (savedNotification) {
+      this.notify.publishCreated(savedNotification);
+    }
 
     const updated = await this.usersService.findById(input.id);
     if (!updated) throw ApiException.notFound('User');

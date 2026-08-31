@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 
-import { appConfig, jwtConfig, uploadsConfig } from './config/app.config';
+import { appConfig, cookieConfig, jwtConfig, uploadsConfig } from './config/app.config';
 import { validateEnv } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
@@ -14,6 +14,7 @@ import { ApplicationsModule } from './admin/applications/applications.module';
 import { AuditEventsModule } from './admin/audit-events/audit-events.module';
 import { NotificationsModule } from './admin/notifications/notifications.module';
 import { AdminNotificationsModule } from './admin/notifications/admin-notifications.module';
+import { NotificationsStreamModule } from './admin/notifications/notifications-stream.module';
 import { ContributorModule } from './contributor/contributor.module';
 import { AdminSubmissionsModule } from './admin/submissions/admin-submissions.module';
 import { LeaderboardModule } from './admin/leaderboard/leaderboard.module';
@@ -36,7 +37,7 @@ import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
       isGlobal: true,
       cache: true,
       // Namespaces: consumers read via ConfigService.get('jwt.accessSecret') etc.
-      load: [appConfig, jwtConfig, uploadsConfig],
+      load: [appConfig, jwtConfig, uploadsConfig, cookieConfig],
       // Boot-time validation — missing/malformed env vars fail here, not later
       // inside a strategy constructor or service.
       validate: validateEnv,
@@ -50,6 +51,7 @@ import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
     AuditEventsModule,
     NotificationsModule,
     AdminNotificationsModule,
+    NotificationsStreamModule,
     LeaderboardModule,
     ApplicationsModule,
     PayoutsModule,

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull } from 'typeorm';
 
+import { cookieExtractor } from '../jwt-cookie-extractor';
 import type { UserRole } from '../../users/entities/user.entity';
 import { User } from '../../users/entities/user.entity';
 
@@ -30,7 +31,9 @@ export class JwtAccessStrategy extends PassportStrategy(
     const secret = config.get<string>('jwt.accessSecret');
     if (!secret) throw new Error('jwt.accessSecret must be set');
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: cookieExtractor(
+        config.get<string>('cookie.accessName') ?? '',
+      ),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

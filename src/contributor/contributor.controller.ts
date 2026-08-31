@@ -5,14 +5,18 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   Patch,
   Post,
   Query,
   Req,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Observable, interval, merge } from 'rxjs';
+import { map } from 'rxjs/operators';
 import type { Request } from 'express';
 
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
@@ -26,6 +30,7 @@ import { ConceptsService } from '../admin/concepts/concepts.service';
 import { SubmissionsService } from './submissions.service';
 import { WalletService } from './wallet.service';
 import { NotificationsService } from '../admin/notifications/notifications.service';
+import { NotificationsStreamService } from '../admin/notifications/notifications-stream.service';
 import {
   CreateSubmissionDto,
   SubmissionIdParamDto,
@@ -91,6 +96,7 @@ export class ContributorController {
     private readonly submissions: SubmissionsService,
     private readonly wallet: WalletService,
     private readonly notify: NotificationsService,
+    private readonly stream: NotificationsStreamService,
     @InjectRepository(Notification)
     private readonly notifications: Repository<Notification>,
     @InjectRepository(Submission)
@@ -268,7 +274,7 @@ export class ContributorController {
   @ApiOperation({ summary: 'Get a published concept by id' })
   async getConcept(@Param() params: SubmissionIdParamDto) {
     const found = await this.concepts.findOne(params.id);
-    if (found.status !== 'published') {
+    if (found.status !== 'active' && (found.status as string) !== 'published') {
       throw ApiException.notFound('Concept');
     }
     return found;
@@ -439,6 +445,29 @@ export class ContributorController {
   // -----------------------------------------------------------------
   // Notifications
   // -----------------------------------------------------------------
+  @Get('notifications/stream')
+  @Sse()
+  @ApiOperation({
+    summary: 'Subscribe to my notification events (Server-Sent Events)',
+  })
+  streamNotifications(
+    @Req() req: Request,
+  ): Observable<MessageEvent> {
+    const user = req.user as { sub: string };
+    const data$ = this.stream.subscribe(user.sub);
+    // 15s heartbeat keeps proxies from dropping idle connections.
+    const heartbeat$ = interval(15_000).pipe(
+      map(
+        () =>
+          ({
+            type: 'ping',
+            data: '',
+          }) satisfies MessageEvent,
+      ),
+    );
+    return merge(data$, heartbeat$);
+  }
+
   @Get('notifications')
   @ApiOperation({ summary: 'My notifications' })
   async myNotifications(

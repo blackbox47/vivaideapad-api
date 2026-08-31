@@ -5,29 +5,39 @@ import {
   HttpStatus,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 import { Public } from '../common/decorators/roles.decorator';
 import { AuthService } from './auth.service';
+import {
+  clearAuthCookies,
+  setAuthCookies,
+} from './cookie-options';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
-import { PasswordChangeDto } from './dto/password-change.dto';
-import { RefreshDto } from './dto/refresh.dto';
+import { TokensDto } from './dto/tokens.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
+import { PasswordChangeDto } from './dto/password-change.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Public()
   @Post('sign-up')
@@ -43,44 +53,101 @@ export class AuthController {
   }
 
   @Public()
+  @ApiOperation({ summary: 'Sign in and obtain access + refresh tokens' })
+  @ApiOkResponse({
+    description: 'Tokens are set as HttpOnly cookies; body returns the user.',
+    type: TokensDto,
+  })
   @Post('sign-in')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sign in and obtain access + refresh tokens' })
-  @ApiOkResponse({ description: 'Tokens + user profile' })
-  async signIn(@Body() input: SignInDto, @Req() req: Request) {
+  async signIn(
+    @Body() input: SignInDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const ua = req.headers['user-agent'] ?? '';
-    return this.auth.signIn({ ...input, ua });
+    const tokens = await this.auth.signIn({ ...input, ua });
+    setAuthCookies(res, this.config, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      user: { id: tokens.user.id, role: tokens.user.role },
+    });
+    // Tokens live in cookies only; the body carries the user view so the SPA
+    // can hydrate Redux without a second request.
+    return { user: tokens.user };
   }
 
   @Public()
   @UseGuards(JwtRefreshGuard)
+  @ApiCookieAuth('refresh-cookie')
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Rotate refresh token' })
-  @ApiOkResponse({ description: 'New token pair' })
-  async refresh(@Body() _body: RefreshDto, @Req() req: Request) {
-    const user = req.user as { sub: string; jti: string };
+  @ApiOperation({
+    summary: 'Rotate refresh token',
+    description:
+      'Consumes the refresh cookie (sent automatically by the browser) and ' +
+      'issues a fresh access + refresh pair. Reuse of a revoked cookie ' +
+      'revokes the entire session family and forces re-authentication.',
+  })
+  @ApiOkResponse({
+    description: 'New token pair set as cookies; user view in body.',
+    type: TokensDto,
+  })
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = req.user as {
+      sub: string;
+      jti: string;
+      family: string;
+      presentedToken: string;
+    };
     const ua = req.headers['user-agent'] ?? '';
-    return this.auth.refresh({ sub: user.sub, jti: user.jti, ua });
+    const tokens = await this.auth.refresh({
+      sub: user.sub,
+      jti: user.jti,
+      family: user.family,
+      presentedToken: user.presentedToken,
+      ua,
+    });
+    setAuthCookies(res, this.config, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      user: { id: tokens.user.id, role: tokens.user.role },
+    });
+    return { user: tokens.user };
   }
 
   @UseGuards(JwtAccessGuard)
+  @ApiCookieAuth('access-cookie')
   @Post('sign-out')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Revoke the active refresh token' })
-  async signOut(@Req() req: Request): Promise<void> {
+  @ApiOperation({
+    summary: 'Revoke the active refresh token and clear auth cookies',
+  })
+  async signOut(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
     const user = req.user as { sub: string; jti?: string };
-    if (!user.jti) return;
-    await this.auth.signOut({ sub: user.sub, jti: user.jti });
+    if (user.jti) {
+      await this.auth.signOut({ sub: user.sub, jti: user.jti });
+    }
+    clearAuthCookies(res, this.config);
   }
 
   @UseGuards(JwtAccessGuard)
+  @ApiCookieAuth('access-cookie')
   @Post('password/change')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Change the current user password' })
+  @ApiOperation({
+    summary: 'Change the current user password and invalidate all sessions',
+  })
   async changePassword(
     @Body() body: PasswordChangeDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     const user = req.user as { sub: string };
     await this.auth.changePassword({
@@ -88,6 +155,7 @@ export class AuthController {
       currentPassword: body.current_password,
       newPassword: body.new_password,
     });
+    clearAuthCookies(res, this.config);
   }
 
   @Public()

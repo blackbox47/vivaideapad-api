@@ -5,6 +5,7 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Notification } from '../notifications/notification.entity';
 import { WalletService } from '../../contributor/wallet.service';
 import { PayoutRequest, PayoutStatus } from './payout.entity';
 import { LedgerEntry } from '../../contributor/entities/ledger-entry.entity';
@@ -180,7 +181,9 @@ export class PayoutsService {
   }): Promise<SerializedPayout> {
     const { id, actorId, body } = input;
 
-    return this.dataSource.transaction(async (manager) => {
+    let savedNotification: Notification | null = null;
+
+    const result = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(PayoutRequest);
       const found = await repo
         .createQueryBuilder('p')
@@ -261,7 +264,7 @@ export class PayoutsService {
         },
       });
 
-      await this.notify.emit(manager, {
+      savedNotification = await this.notify.emit(manager, {
         recipientId: found.userId,
         type: 'payout_status_changed',
         title:
@@ -276,5 +279,10 @@ export class PayoutsService {
 
       return toSerialized(saved);
     });
+
+    if (savedNotification) {
+      this.notify.publishCreated(savedNotification);
+    }
+    return result;
   }
 }
