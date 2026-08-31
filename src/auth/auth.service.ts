@@ -13,6 +13,7 @@ import { User, UserRole, USER_ROLES } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import type { JwtAccessPayload } from './strategies/jwt-access.strategy';
 import type { JwtRefreshPayload } from './strategies/jwt-refresh.strategy';
+import { parseTtl, parseTtlSeconds } from './auth.service-helpers';
 
 export interface AuthUserView {
   id: string;
@@ -87,6 +88,8 @@ export class AuthService {
   async refresh(input: {
     sub: string;
     jti: string;
+    family: string;
+    presentedToken: string;
     ua?: string;
   }): Promise<AuthTokens> {
     const user = await this.users.findById(input.sub);
@@ -95,12 +98,32 @@ export class AuthService {
       throw ApiException.forbidden('account_suspended', 'Account is suspended');
     }
 
-    // Atomic revoke + issue. Two-step: revoke the old row, issue new pair.
+    // The strategy already verified hash matches and the row exists and is
+    // not expired. Re-fetch the row here to inspect `revokedAt`: if the
+    // presented token was already rotated (revoked), this is a replay —
+    // revoke the entire family and reject.
+    const stored = await this.refreshTokens.findOne({
+      where: { id: input.jti, userId: input.sub },
+    });
+    if (!stored) {
+      throw ApiException.unauthorized('Refresh token not recognized');
+    }
+    if (stored.revokedAt) {
+      // Reuse of an already-rotated token: treat the family as compromised.
+      await this.refreshTokens.update(
+        { family: stored.family, revokedAt: IsNull() },
+        { revokedAt: new Date() },
+      );
+      throw ApiException.unauthorized(
+        'Refresh token has been revoked; please sign in again',
+      );
+    }
+
     await this.refreshTokens.update(
       { id: input.jti, userId: input.sub },
       { revokedAt: new Date() },
     );
-    return this.issueTokens(user, input.ua);
+    return this.issueTokens(user, input.ua, stored.family);
   }
 
   async signOut(input: { sub: string; jti: string }): Promise<void> {
@@ -156,7 +179,11 @@ export class AuthService {
   // Internals
   // ------------------------------------------------------------------
 
-  private async issueTokens(user: User, ua?: string): Promise<AuthTokens> {
+  private async issueTokens(
+    user: User,
+    ua?: string,
+    family?: string,
+  ): Promise<AuthTokens> {
     const accessTtl = this.config.get<string>(
       'jwt.accessTtl',
     ) as ms.StringValue;
@@ -176,6 +203,9 @@ export class AuthService {
     });
 
     const jti = randomBytes(16).toString('hex');
+    // Start a new family on sign-in; reuse the caller's family on refresh
+    // so that all rotated tokens in one session share an identity.
+    const tokenFamily = family ?? randomBytes(16).toString('hex');
     const refreshPayload: JwtRefreshPayload = {
       sub: user.id,
       jti,
@@ -191,6 +221,7 @@ export class AuthService {
     await this.refreshTokens.insert({
       id: jti,
       userId: user.id,
+      family: tokenFamily,
       tokenHash: await bcrypt.hash(refreshToken, 8),
       expiresAt,
       revokedAt: null,
@@ -210,28 +241,5 @@ export class AuthService {
         access_status: user.accessStatus,
       },
     };
-  }
-}
-
-function parseTtl(ttl: string): Date {
-  return new Date(Date.now() + parseTtlSeconds(ttl) * 1000);
-}
-
-function parseTtlSeconds(ttl: string): number {
-  // Very small TTL parser: supports "15m", "7d", "30s", "1h", or bare number-of-seconds.
-  const m = /^(\d+)([smhd])?$/.exec(ttl.trim());
-  if (!m) return 900;
-  const n = Number(m[1]);
-  switch (m[2]) {
-    case 's':
-      return n;
-    case 'm':
-      return n * 60;
-    case 'h':
-      return n * 3600;
-    case 'd':
-      return n * 86400;
-    default:
-      return n;
   }
 }
