@@ -450,9 +450,7 @@ export class ContributorController {
   @ApiOperation({
     summary: 'Subscribe to my notification events (Server-Sent Events)',
   })
-  streamNotifications(
-    @Req() req: Request,
-  ): Observable<MessageEvent> {
+  streamNotifications(@Req() req: Request): Observable<MessageEvent> {
     const user = req.user as { sub: string };
     const data$ = this.stream.subscribe(user.sub);
     // 15s heartbeat keeps proxies from dropping idle connections.
