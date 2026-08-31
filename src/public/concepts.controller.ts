@@ -49,7 +49,7 @@ export class PublicConceptsController {
   @ApiOkResponse({ description: 'The published concept' })
   async get(@Param() params: ConceptIdParamDto) {
     const found = await this.concepts.findOne(params.id);
-    if (found.status !== 'published') {
+    if (found.status !== 'active' && (found.status as string) !== 'published') {
       throw ApiException.notFound('Concept');
     }
     return found;

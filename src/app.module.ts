@@ -14,6 +14,7 @@ import { ApplicationsModule } from './admin/applications/applications.module';
 import { AuditEventsModule } from './admin/audit-events/audit-events.module';
 import { NotificationsModule } from './admin/notifications/notifications.module';
 import { AdminNotificationsModule } from './admin/notifications/admin-notifications.module';
+import { NotificationsStreamModule } from './admin/notifications/notifications-stream.module';
 import { ContributorModule } from './contributor/contributor.module';
 import { AdminSubmissionsModule } from './admin/submissions/admin-submissions.module';
 import { LeaderboardModule } from './admin/leaderboard/leaderboard.module';
@@ -50,6 +51,7 @@ import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
     AuditEventsModule,
     NotificationsModule,
     AdminNotificationsModule,
+    NotificationsStreamModule,
     LeaderboardModule,
     ApplicationsModule,
     PayoutsModule,

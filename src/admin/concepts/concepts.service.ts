@@ -73,7 +73,7 @@ export class ConceptsService {
     const qb = this.repo
       .createQueryBuilder('c')
       .where('c.deleted_at IS NULL')
-      .andWhere('c.status = :st', { st: 'published' });
+      .andWhere('c.status IN (:...st)', { st: ['active', 'published'] });
     if (input.category_id) {
       qb.andWhere('c.category_id = :cid', { cid: input.category_id });
     }
@@ -139,7 +139,7 @@ export class ConceptsService {
       where: { id, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Concept');
-    found.status = 'published';
+    found.status = 'active';
     found.openDate = found.openDate ?? new Date();
     const saved = await this.repo.save(found);
     return toSerialized(saved);
@@ -150,7 +150,7 @@ export class ConceptsService {
       where: { id, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Concept');
-    found.status = 'closed';
+    found.status = 'archived';
     found.closeDate = found.closeDate ?? new Date();
     const saved = await this.repo.save(found);
     return toSerialized(saved);

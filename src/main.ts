@@ -38,7 +38,16 @@ async function bootstrap() {
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
+    // `Accept` and `Cache-Control` are required by the browser EventSource
+    // implementation; `Last-Event-ID` is sent on reconnect (we reserve it
+    // for a Phase 2 replay feature).
+    allowedHeaders: [
+      'Content-Type',
+      'Accept',
+      'Cache-Control',
+      'Last-Event-ID',
+    ],
+    exposedHeaders: ['Last-Event-ID'],
   });
 
   app.setGlobalPrefix('api/v1', {
