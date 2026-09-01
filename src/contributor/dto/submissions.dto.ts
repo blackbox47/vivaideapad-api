@@ -7,6 +7,14 @@ export const SubmissionSchema = z.object({
   id: z.uuid(),
   user_id: z.uuid(),
   concept_id: z.uuid(),
+  concept_title: z.string().nullable().optional(),
+  concept: z
+    .object({
+      id: z.string(),
+      title: z.string(),
+    })
+    .nullable()
+    .optional(),
   title: z.string(),
   body: z.string(),
   attachments: z.record(z.string(), z.unknown()).nullable(),
@@ -26,20 +34,45 @@ export const CreateSubmissionSchema = z.object({
   concept_id: z.uuid(),
   title: z.string().min(1).max(255),
   body: z.string().min(1).max(20_000),
-  attachments: z.record(z.string(), z.unknown()).optional(),
+  attachments: z
+    .union([z.record(z.string(), z.unknown()), z.string()])
+    .optional()
+    .transform((val) => {
+      if (typeof val === 'string') {
+        try {
+          return JSON.parse(val) as Record<string, unknown>;
+        } catch {
+          return { url: val };
+        }
+      }
+      return val;
+    }),
 });
 export class CreateSubmissionDto extends createZodDto(CreateSubmissionSchema) {}
 
 export const UpdateSubmissionSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   body: z.string().min(1).max(20_000).optional(),
-  attachments: z.record(z.string(), z.unknown()).optional(),
+  attachments: z
+    .union([z.record(z.string(), z.unknown()), z.string()])
+    .optional()
+    .transform((val) => {
+      if (typeof val === 'string') {
+        try {
+          return JSON.parse(val) as Record<string, unknown>;
+        } catch {
+          return { url: val };
+        }
+      }
+      return val;
+    }),
 });
 export class UpdateSubmissionDto extends createZodDto(UpdateSubmissionSchema) {}
 
 export const SubmissionListQuerySchema = z.object({
   status: z.enum(SUBMISSION_STATUSES).optional(),
   concept_id: z.uuid().optional(),
+  search: z.string().optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).optional(),
 });

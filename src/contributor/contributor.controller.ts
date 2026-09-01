@@ -12,9 +12,12 @@ import {
   Query,
   Req,
   Sse,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Observable, interval, merge } from 'rxjs';
 import { map } from 'rxjs/operators';
 import type { Request } from 'express';
@@ -31,6 +34,7 @@ import { SubmissionsService } from './submissions.service';
 import { WalletService } from './wallet.service';
 import { NotificationsService } from '../admin/notifications/notifications.service';
 import { NotificationsStreamService } from '../admin/notifications/notifications-stream.service';
+import { UploadsService } from '../uploads/uploads.service';
 import {
   CreateSubmissionDto,
   SubmissionIdParamDto,
@@ -104,6 +108,7 @@ export class ContributorController {
     private readonly concepts: ConceptsService,
     private readonly payouts: PayoutsService,
     private readonly leaderboard: LeaderboardService,
+    private readonly uploads: UploadsService,
   ) {}
 
   // -----------------------------------------------------------------
@@ -284,13 +289,34 @@ export class ContributorController {
   // Submissions
   // -----------------------------------------------------------------
   @Post('submissions')
+  @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Create a new submission (draft)' })
+  @ApiConsumes('multipart/form-data', 'application/json')
   async createSubmission(
     @Body() input: CreateSubmissionDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: Request,
   ) {
     const user = req.user as { sub: string };
-    return this.submissions.create(user.sub, input);
+    let attachments = input.attachments ?? null;
+    if (file) {
+      const stored = await this.uploads.storeAttachment({
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: file.path,
+      });
+      attachments = {
+        url: stored.url,
+        mime_type: stored.mime_type,
+        size: stored.size,
+        original_name: stored.original_name,
+      };
+    }
+    return this.submissions.create(user.sub, {
+      ...input,
+      attachments: attachments ?? undefined,
+    });
   }
 
   @Get('submissions')
@@ -305,6 +331,7 @@ export class ContributorController {
       userId: user.sub,
       status: query.status,
       concept_id: query.concept_id,
+      search: query.search,
       page,
       limit,
     });
@@ -322,14 +349,35 @@ export class ContributorController {
   }
 
   @Patch('submissions/:id')
+  @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Edit a draft / changes-requested submission' })
+  @ApiConsumes('multipart/form-data', 'application/json')
   async updateSubmission(
     @Param() params: SubmissionIdParamDto,
     @Body() body: UpdateSubmissionDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: Request,
   ) {
     const user = req.user as { sub: string };
-    return this.submissions.update(params.id, user.sub, body);
+    let attachments = body.attachments;
+    if (file) {
+      const stored = await this.uploads.storeAttachment({
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: file.path,
+      });
+      attachments = {
+        url: stored.url,
+        mime_type: stored.mime_type,
+        size: stored.size,
+        original_name: stored.original_name,
+      };
+    }
+    return this.submissions.update(params.id, user.sub, {
+      ...body,
+      attachments,
+    });
   }
 
   @Post('submissions/:id/submit')
