@@ -118,13 +118,27 @@ export class PayoutsService {
         throw ApiException.insufficientBalance();
       }
 
+      const rawDetails = input.body.details ?? {};
+      const mobileNum = input.body.mobile ?? input.body.phone;
+      const details: Record<string, unknown> = {
+        ...rawDetails,
+        ...(mobileNum
+          ? {
+              mobile: mobileNum,
+              phone: mobileNum,
+              account_number: rawDetails.account_number ?? mobileNum,
+            }
+          : {}),
+      };
+      const detailsToSave = Object.keys(details).length > 0 ? details : null;
+
       const repo = manager.getRepository(PayoutRequest);
       const row = repo.create({
         userId: input.userId,
         amount: amount.toFixed(2),
         status: 'pending',
         method: input.body.method ?? null,
-        details: input.body.details ?? null,
+        details: detailsToSave,
         decisionNotes: null,
         processingReference: null,
         processedAt: null,
@@ -138,7 +152,14 @@ export class PayoutsService {
         amount: (-amount).toFixed(2),
         status: 'pending',
         reference: `payout:${saved.id}`,
-        metadata: { payout_id: saved.id },
+        metadata: {
+          payout_id: saved.id,
+          description: input.body.method
+            ? mobileNum
+              ? `${input.body.method} · ${mobileNum}`
+              : `${input.body.method} payout`
+            : 'Withdrawal request',
+        },
       });
 
       return toSerialized(saved);
@@ -151,12 +172,26 @@ export class PayoutsService {
     body: CreatePayoutDto;
   }): Promise<SerializedPayout> {
     const amount = Number(input.body.amount);
+    const rawDetails = input.body.details ?? {};
+    const mobileNum = input.body.mobile ?? input.body.phone;
+    const details: Record<string, unknown> = {
+      ...rawDetails,
+      ...(mobileNum
+        ? {
+            mobile: mobileNum,
+            phone: mobileNum,
+            account_number: rawDetails.account_number ?? mobileNum,
+          }
+        : {}),
+    };
+    const detailsToSave = Object.keys(details).length > 0 ? details : null;
+
     const row = this.repo.create({
       userId: input.userId,
       amount: amount.toFixed(2),
       status: 'pending',
       method: input.body.method ?? null,
-      details: input.body.details ?? null,
+      details: detailsToSave,
     });
     const saved = await this.repo.save(row);
     await this.audit.recordStandalone({
