@@ -52,7 +52,8 @@ export class NotificationsStreamService {
   subscribe(userId: string): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       const subject = new Subject<MessageEvent>();
-      const set = this.subscribers.get(userId) ?? new Set<Subject<MessageEvent>>();
+      const set =
+        this.subscribers.get(userId) ?? new Set<Subject<MessageEvent>>();
       set.add(subject);
       this.subscribers.set(userId, set);
 

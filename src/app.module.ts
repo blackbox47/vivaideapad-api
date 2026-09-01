@@ -2,7 +2,12 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 
-import { appConfig, cookieConfig, jwtConfig, uploadsConfig } from './config/app.config';
+import {
+  appConfig,
+  cookieConfig,
+  jwtConfig,
+  uploadsConfig,
+} from './config/app.config';
 import { validateEnv } from './config/env.schema';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
@@ -28,6 +33,7 @@ import { DashboardModule } from './admin/dashboard/dashboard.module';
 import { ReportsModule } from './admin/reports/reports.module';
 import { LedgerAdminModule } from './admin/ledger/ledger-admin.module';
 import { AdminsModule } from './admin/admins/admins.module';
+import { PaymentMethodsModule } from './admin/payment-methods/payment-methods.module';
 import { RolesGuard } from './common/guards/roles.guard';
 import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
 
@@ -66,6 +72,7 @@ import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
     ReportsModule,
     LedgerAdminModule,
     AdminsModule,
+    PaymentMethodsModule,
   ],
   providers: [
     {

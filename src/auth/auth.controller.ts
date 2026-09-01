@@ -20,10 +20,7 @@ import type { Request, Response } from 'express';
 
 import { Public } from '../common/decorators/roles.decorator';
 import { AuthService } from './auth.service';
-import {
-  clearAuthCookies,
-  setAuthCookies,
-} from './cookie-options';
+import { clearAuthCookies, setAuthCookies } from './cookie-options';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { TokensDto } from './dto/tokens.dto';
 import { SignInDto } from './dto/sign-in.dto';

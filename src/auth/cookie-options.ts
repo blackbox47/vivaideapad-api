@@ -56,13 +56,18 @@ export function setAuthCookies(
     user: { id: string; role: number };
   },
 ): void {
-  const accessName = cfg.get<string>('cookie.accessName') ?? 'vivaideapad.access';
+  const accessName =
+    cfg.get<string>('cookie.accessName') ?? 'vivaideapad.access';
   const refreshName =
     cfg.get<string>('cookie.refreshName') ?? 'vivaideapad.refresh';
   const sessionName =
     cfg.get<string>('cookie.sessionName') ?? 'vivaideapad.session';
 
-  res.cookie(accessName, payload.accessToken, buildCookieOptions(cfg, 'access'));
+  res.cookie(
+    accessName,
+    payload.accessToken,
+    buildCookieOptions(cfg, 'access'),
+  );
   res.cookie(
     refreshName,
     payload.refreshToken,
