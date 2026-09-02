@@ -123,7 +123,11 @@ export class ConceptsService {
       found.rewardBudget = String(patch.reward_budget);
     }
     if (patch.status !== undefined) found.status = patch.status;
-    if (patch.metadata !== undefined) found.metadata = patch.metadata;
+    if (patch.metadata !== undefined) {
+      found.metadata = patch.metadata
+        ? { ...(found.metadata || {}), ...patch.metadata }
+        : found.metadata;
+    }
     if (patch.open_date !== undefined) {
       found.openDate = patch.open_date ? new Date(patch.open_date) : null;
     }

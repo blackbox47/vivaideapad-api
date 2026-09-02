@@ -5,20 +5,28 @@ import { ConceptsModule } from '../admin/concepts/concepts.module';
 import { NotificationsModule } from '../admin/notifications/notifications.module';
 import { PayoutsModule } from '../admin/payouts/payouts.module';
 import { LeaderboardModule } from '../admin/leaderboard/leaderboard.module';
+import { UploadsModule } from '../uploads/uploads.module';
 import { LedgerEntry } from './entities/ledger-entry.entity';
 import { Submission } from './entities/submission.entity';
 import { Notification } from '../admin/notifications/notification.entity';
+import { Concept } from '../admin/concepts/concept.entity';
 import { ContributorController } from './contributor.controller';
 import { SubmissionsService } from './submissions.service';
 import { WalletService } from './wallet.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Submission, LedgerEntry, Notification]),
+    TypeOrmModule.forFeature([
+      Submission,
+      LedgerEntry,
+      Notification,
+      Concept,
+    ]),
     ConceptsModule,
     NotificationsModule,
     PayoutsModule,
     LeaderboardModule,
+    UploadsModule,
   ],
   controllers: [ContributorController],
   providers: [SubmissionsService, WalletService],

@@ -24,7 +24,7 @@ export class WalletService {
   ) {}
 
   /**
-   * Balance = SUM of posted entries (signed).
+   * Balance = SUM of posted entries (signed) + pending payout holds.
    * Pending  = -SUM of pending payout_hold entries (so the contributor
    *            can see how much is reserved for an in-flight payout).
    * Lifetime_credits = +SUM of posted credits (reward_credit, manual_adjustment > 0)
@@ -34,11 +34,11 @@ export class WalletService {
     const row = await this.repo
       .createQueryBuilder('l')
       .select(
-        'COALESCE(SUM(CASE WHEN l.status = :posted THEN l.amount ELSE 0 END), 0)',
+        'COALESCE(SUM(CASE WHEN l.status = :posted OR (l.status = :pending AND l.type = :hold) THEN l.amount ELSE 0 END), 0)',
         'balance',
       )
       .addSelect(
-        'COALESCE(SUM(CASE WHEN l.status = :pending AND l.type = :hold THEN l.amount ELSE 0 END), 0)',
+        'COALESCE(SUM(CASE WHEN l.status = :pending AND l.type = :hold THEN -l.amount ELSE 0 END), 0)',
         'pending',
       )
       .addSelect(
@@ -46,7 +46,7 @@ export class WalletService {
         'lifetime_credits',
       )
       .addSelect(
-        'COALESCE(SUM(CASE WHEN l.status = :posted AND l.amount < 0 THEN l.amount ELSE 0 END), 0)',
+        'COALESCE(SUM(CASE WHEN l.status = :posted AND l.amount < 0 THEN -l.amount ELSE 0 END), 0)',
         'lifetime_debits',
       )
       .where('l.user_id = :uid', { uid: userId })

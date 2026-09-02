@@ -26,8 +26,8 @@ export const CreateConceptSchema = z.object({
   reward_budget: z.coerce.number().nonnegative().default(0),
   status: z.enum(CONCEPT_STATUSES).default('draft'),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  open_date: z.iso.datetime().optional(),
-  close_date: z.iso.datetime().optional(),
+  open_date: z.iso.datetime().nullable().optional(),
+  close_date: z.iso.datetime().nullable().optional(),
 });
 
 export class CreateConceptDto extends createZodDto(CreateConceptSchema) {}

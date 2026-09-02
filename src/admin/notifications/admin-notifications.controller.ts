@@ -73,7 +73,7 @@ export class AdminNotificationsController {
     private readonly stream: NotificationsStreamService,
   ) {}
 
-  @Get('notifications/stream')
+  @Get('stream')
   @Sse()
   @ApiOperation({
     summary: 'Subscribe to admin notification events (Server-Sent Events)',

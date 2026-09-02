@@ -4,6 +4,7 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../common/exceptions/api-exception';
 import { Submission, SubmissionStatus } from './entities/submission.entity';
+import { Concept } from '../admin/concepts/concept.entity';
 import {
   CreateSubmissionDto,
   UpdateSubmissionDto,
@@ -13,6 +14,11 @@ export interface SerializedSubmission {
   id: string;
   user_id: string;
   concept_id: string;
+  concept_title?: string | null;
+  concept?: {
+    id: string;
+    title: string;
+  } | null;
   title: string;
   body: string;
   attachments: Record<string, unknown> | null;
@@ -26,10 +32,20 @@ export interface SerializedSubmission {
   updated_at: Date;
 }
 
-const toSerialized = (s: Submission): SerializedSubmission => ({
+const toSerialized = (
+  s: Submission,
+  conceptTitle?: string | null,
+): SerializedSubmission => ({
   id: s.id,
   user_id: s.userId,
   concept_id: s.conceptId,
+  concept_title: conceptTitle ?? null,
+  concept: s.conceptId
+    ? {
+        id: s.conceptId,
+        title: conceptTitle ?? '',
+      }
+    : null,
   title: s.title,
   body: s.body,
   attachments: s.attachments,
@@ -49,12 +65,15 @@ export class SubmissionsService {
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(Submission)
     private readonly repo: Repository<Submission>,
+    @InjectRepository(Concept)
+    private readonly conceptRepo: Repository<Concept>,
   ) {}
 
   async list(input: {
     userId: string;
     status?: SubmissionStatus;
     concept_id?: string;
+    search?: string;
     page: number;
     limit: number;
   }): Promise<{ data: SerializedSubmission[]; total: number }> {
@@ -65,11 +84,33 @@ export class SubmissionsService {
     if (input.status) qb.andWhere('s.status = :st', { st: input.status });
     if (input.concept_id)
       qb.andWhere('s.concept_id = :cid', { cid: input.concept_id });
+    if (input.search) {
+      qb.andWhere('(s.title LIKE :q OR s.body LIKE :q)', {
+        q: `%${input.search}%`,
+      });
+    }
     qb.orderBy('s.created_at', 'DESC')
       .skip((input.page - 1) * input.limit)
       .take(input.limit);
     const [rows, total] = await qb.getManyAndCount();
-    return { data: rows.map(toSerialized), total };
+
+    if (rows.length === 0) return { data: [], total };
+
+    const conceptIds = Array.from(
+      new Set(rows.map((r) => r.conceptId).filter(Boolean)),
+    );
+    const conceptRows =
+      conceptIds.length > 0
+        ? await this.conceptRepo.find({
+            where: conceptIds.map((id) => ({ id })),
+          })
+        : [];
+    const conceptById = new Map(conceptRows.map((c) => [c.id, c.title]));
+
+    return {
+      data: rows.map((r) => toSerialized(r, conceptById.get(r.conceptId))),
+      total,
+    };
   }
 
   async findOneForUser(
@@ -80,7 +121,10 @@ export class SubmissionsService {
       where: { id, userId, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Submission');
-    return toSerialized(found);
+    const concept = found.conceptId
+      ? await this.conceptRepo.findOne({ where: { id: found.conceptId } })
+      : null;
+    return toSerialized(found, concept?.title);
   }
 
   async create(
@@ -96,7 +140,10 @@ export class SubmissionsService {
       status: 'draft',
     });
     const saved = await this.repo.save(row);
-    return toSerialized(saved);
+    const concept = saved.conceptId
+      ? await this.conceptRepo.findOne({ where: { id: saved.conceptId } })
+      : null;
+    return toSerialized(saved, concept?.title);
   }
 
   async update(
@@ -118,7 +165,10 @@ export class SubmissionsService {
     if (patch.body !== undefined) found.body = patch.body;
     if (patch.attachments !== undefined) found.attachments = patch.attachments;
     const saved = await this.repo.save(found);
-    return toSerialized(saved);
+    const concept = saved.conceptId
+      ? await this.conceptRepo.findOne({ where: { id: saved.conceptId } })
+      : null;
+    return toSerialized(saved, concept?.title);
   }
 
   async submit(id: string, userId: string): Promise<SerializedSubmission> {
@@ -134,7 +184,10 @@ export class SubmissionsService {
     }
     found.status = 'pending_review';
     const saved = await this.repo.save(found);
-    return toSerialized(saved);
+    const concept = saved.conceptId
+      ? await this.conceptRepo.findOne({ where: { id: saved.conceptId } })
+      : null;
+    return toSerialized(saved, concept?.title);
   }
 
   async softDelete(id: string, userId: string): Promise<void> {

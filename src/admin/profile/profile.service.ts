@@ -43,7 +43,9 @@ const DEFAULT_PAYOUT: SerializedPayoutMethod = {
   label: 'bKash · 018•••42',
 };
 
-function asPrefs(value: Record<string, unknown> | null): Record<string, unknown> {
+function asPrefs(
+  value: Record<string, unknown> | null,
+): Record<string, unknown> {
   return value ? { ...value } : {};
 }
 
@@ -105,8 +107,7 @@ export class ProfileService {
     if (!found) throw ApiException.notFound('User');
 
     const displayName = input.body.display_name ?? input.body.name;
-    const publicDisplay =
-      input.body.public_display ?? input.body.publicDisplay;
+    const publicDisplay = input.body.public_display ?? input.body.publicDisplay;
     const patch: {
       displayName?: string;
       bio?: string;

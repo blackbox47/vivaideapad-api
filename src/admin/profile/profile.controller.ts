@@ -46,8 +46,8 @@ const DisplayPrefsSchema = z.object({
 class UpdateDisplayPrefsDto extends createZodDto(DisplayPrefsSchema) {}
 
 const UpdatePasswordSchema = z.object({
-  password: z.string().min(8).optional(),
-  new_password: z.string().min(8).optional(),
+  password: z.string().min(8).max(128).optional(),
+  new_password: z.string().min(8).max(128).optional(),
   current_password: z.string().optional(),
 });
 class UpdatePasswordDto extends createZodDto(UpdatePasswordSchema) {}
