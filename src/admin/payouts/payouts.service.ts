@@ -270,19 +270,10 @@ export class PayoutsService {
         pendingLedger.postedAt = new Date();
         await ledgerRepo.save(pendingLedger);
       } else {
-        // reject — flip the pending hold to reversed + insert a fresh
-        // posted reversal ledger so the contributor's balance is restored.
+        // reject — flip the pending hold to reversed so the hold is released
+        // and the contributor's available balance is restored.
         pendingLedger.status = 'reversed';
         await ledgerRepo.save(pendingLedger);
-
-        await this.wallet.recordInTx(manager, {
-          userId: found.userId,
-          type: 'payout_reversal',
-          amount: Math.abs(Number(pendingLedger.amount)).toFixed(2),
-          status: 'posted',
-          reference: `payout:${id}`,
-          metadata: { payout_id: id, reversal_of: pendingLedger.id },
-        });
       }
 
       await this.audit.record(manager, {
