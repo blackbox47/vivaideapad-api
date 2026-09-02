@@ -21,9 +21,9 @@ export class PayoutDto extends createZodDto(PayoutSchema) {}
 
 export const CreatePayoutSchema = z.object({
   amount: z.coerce.number().positive(),
-  method: z.string().max(255).optional(),
-  mobile: z.string().max(50).optional(),
-  phone: z.string().max(50).optional(),
+  method: z.string().min(1).max(40).optional(),
+  mobile: z.string().min(1).max(50).optional(),
+  phone: z.string().min(1).max(50).optional(),
   details: z.record(z.string(), z.unknown()).optional(),
 });
 export class CreatePayoutDto extends createZodDto(CreatePayoutSchema) {}

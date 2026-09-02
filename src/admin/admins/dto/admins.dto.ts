@@ -14,7 +14,7 @@ export const AdminListQuerySchema = z.object({
 export class AdminListQueryDto extends createZodDto(AdminListQuerySchema) {}
 
 export const CreateAdminSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(255),
   password: z.string().min(8).max(128),
   display_name: z.string().min(1).max(120).optional(),
 });
