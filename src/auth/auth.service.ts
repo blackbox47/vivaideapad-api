@@ -85,6 +85,33 @@ export class AuthService {
     return this.issueTokens(user, input.ua);
   }
 
+  /**
+   * Admin-only sign-in. Delegates credential verification to `signIn(...)`
+   * so the bcrypt check + suspended-account guard stay in a single place,
+   * then enforces the admin role gate AFTER a successful credential match.
+   * Non-admin (e.g. CONTRIBUTOR) users are rejected with a 403 — distinct
+   * from the 401 returned for bad credentials, so the SPA can show an
+   * "admin access required" message and the endpoint is not appropriate
+   * for password-spraying enumeration of admin accounts.
+   */
+  async signInAdmin(input: {
+    email: string;
+    password: string;
+    ua?: string;
+  }): Promise<AuthTokens> {
+    const tokens = await this.signIn(input);
+    if (
+      tokens.user.role !== USER_ROLES.ADMINISTRATOR &&
+      tokens.user.role !== USER_ROLES.SUPERADMIN
+    ) {
+      throw ApiException.forbidden(
+        'admin_required',
+        'Admin access is required to sign in here',
+      );
+    }
+    return tokens;
+  }
+
   async refresh(input: {
     sub: string;
     jti: string;
