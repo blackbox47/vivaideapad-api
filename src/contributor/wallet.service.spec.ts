@@ -28,7 +28,9 @@ describe('WalletService', () => {
       const summary = await service.summary('user-123');
 
       expect(mockRepo.createQueryBuilder).toHaveBeenCalledWith('l');
-      expect(qb.where).toHaveBeenCalledWith('l.user_id = :uid', { uid: 'user-123' });
+      expect(qb.where).toHaveBeenCalledWith('l.user_id = :uid', {
+        uid: 'user-123',
+      });
       expect(summary).toEqual({
         balance: '16400.00',
         pending: '10000.00',

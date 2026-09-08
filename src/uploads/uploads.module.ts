@@ -35,6 +35,6 @@ import { UploadsService } from './uploads.service';
   ],
   controllers: [UploadsController],
   providers: [UploadsService],
-  exports: [UploadsService],
+  exports: [UploadsService, MulterModule],
 })
 export class UploadsModule {}

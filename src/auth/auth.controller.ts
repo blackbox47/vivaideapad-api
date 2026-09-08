@@ -75,6 +75,36 @@ export class AuthController {
   }
 
   @Public()
+  @ApiOperation({
+    summary: 'Admin sign-in (ADMINISTRATOR or SUPERADMIN only)',
+    description:
+      'Mirrors `POST /auth/sign-in` but rejects any non-admin user — ' +
+      'including contributors — with `403 admin_required` after a ' +
+      'successful credential match. Bad credentials still produce the ' +
+      'generic `401 Invalid email or password` response.',
+  })
+  @ApiOkResponse({
+    description: 'Tokens are set as HttpOnly cookies; body returns the user.',
+    type: TokensDto,
+  })
+  @Post('admin/sign-in')
+  @HttpCode(HttpStatus.OK)
+  async adminSignIn(
+    @Body() input: SignInDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ua = req.headers['user-agent'] ?? '';
+    const tokens = await this.auth.signInAdmin({ ...input, ua });
+    setAuthCookies(res, this.config, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      user: { id: tokens.user.id, role: tokens.user.role },
+    });
+    return { user: tokens.user };
+  }
+
+  @Public()
   @UseGuards(JwtRefreshGuard)
   @ApiCookieAuth('refresh-cookie')
   @Post('refresh')

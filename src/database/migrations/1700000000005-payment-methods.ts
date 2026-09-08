@@ -24,13 +24,10 @@ export class PaymentMethods1700000000005 implements MigrationInterface {
       ) ENGINE=InnoDB`,
     );
 
-    // Seed initial payment methods
+    // Seed initial payment methods (only bKash for now)
     await queryRunner.query(
       `INSERT INTO \`payment_methods\` (\`id\`, \`code\`, \`name\`, \`description\`, \`account_hint\`, \`is_active\`, \`sort_order\`) VALUES
-      (UUID(), 'bKash', 'bKash', 'bKash mobile financial service', '018•••42', 1, 1),
-      (UUID(), 'Nagad', 'Nagad', 'Nagad digital financial service', NULL, 1, 2),
-      (UUID(), 'Rocket', 'Rocket', 'Dutch-Bangla Bank Rocket mobile banking', NULL, 1, 3),
-      (UUID(), 'Bank', 'Bank transfer', 'Direct electronic bank wire transfer', NULL, 1, 4)`,
+      (UUID(), 'bKash', 'bKash', 'bKash mobile financial service', '018•••42', 1, 1)`,
     );
   }
 

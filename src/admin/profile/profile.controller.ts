@@ -1,5 +1,20 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiConsumes,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
@@ -8,14 +23,13 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAccessGuard } from '../../auth/guards/jwt-access.guard';
 import { ProfileService } from './profile.service';
 import { USER_ROLES } from '../../users/entities/user.entity';
+import { MAX_AVATAR_SIZE } from '../../uploads/uploads.service';
 
 const UpdateProfileSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
   name: z.string().min(1).max(120).optional(),
   bio: z.string().max(2000).optional(),
   phone: z.string().max(40).optional(),
-  public_display: z.string().max(40).optional(),
-  publicDisplay: z.string().max(40).optional(),
   avatar_url: z.string().max(512).optional(),
 });
 class UpdateProfileDto extends createZodDto(UpdateProfileSchema) {}
@@ -31,11 +45,13 @@ const UpdatePayoutMethodSchema = z.object({
   method: z.string().min(1).max(40).optional(),
   label: z.string().min(1).max(120).optional(),
   account: z.string().max(80).optional(),
+  mobile: z.string().max(80).optional(),
+  phone: z.string().max(80).optional(),
 });
 class UpdatePayoutMethodDto extends createZodDto(UpdatePayoutMethodSchema) {}
 
 const UpdateAvatarSchema = z.object({
-  dataUrl: z.string().min(1).optional(),
+  dataUrl: z.string().optional(),
   avatar_url: z.string().max(512).optional(),
 });
 class UpdateAvatarDto extends createZodDto(UpdateAvatarSchema) {}
@@ -48,7 +64,8 @@ class UpdateDisplayPrefsDto extends createZodDto(DisplayPrefsSchema) {}
 const UpdatePasswordSchema = z.object({
   password: z.string().min(8).max(128).optional(),
   new_password: z.string().min(8).max(128).optional(),
-  current_password: z.string().optional(),
+  current_password: z.string().min(1).max(128).optional(),
+  currentPassword: z.string().min(1).max(128).optional(),
 });
 class UpdatePasswordDto extends createZodDto(UpdatePasswordSchema) {}
 
@@ -131,15 +148,23 @@ export class ProfileController {
   }
 
   @Post('avatar')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_AVATAR_SIZE },
+    }),
+  )
   @ApiOperation({ summary: 'Update profile avatar' })
+  @ApiConsumes('multipart/form-data', 'application/json')
   async updateAvatar(
     @Body() body: UpdateAvatarDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @CurrentUser() actor: { id: string },
   ) {
     return this.profile.updateAvatar({
       userId: actor.id,
-      dataUrl: body.dataUrl,
-      avatarUrl: body.avatar_url,
+      file,
+      dataUrl: body?.dataUrl,
+      avatarUrl: body?.avatar_url,
     });
   }
 
@@ -153,7 +178,7 @@ export class ProfileController {
       userId: actor.id,
       method: body.method,
       label: body.label,
-      account: body.account,
+      account: body.account ?? body.mobile ?? body.phone,
     });
   }
 }

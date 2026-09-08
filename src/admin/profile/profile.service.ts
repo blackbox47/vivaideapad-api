@@ -4,10 +4,16 @@ import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 import { ApiException } from '../../common/exceptions/api-exception';
+import { toBdLocalMobile } from '../../common/utils/bd-mobile';
 import { AuditEventsService } from '../audit-events/audit-events.service';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/users.service';
 import { AdminUsersService } from '../users/admin-users.service';
+import {
+  UploadsService,
+  MAX_AVATAR_SIZE,
+  ALLOWED_AVATAR_MIMES,
+} from '../../uploads/uploads.service';
 
 export interface SerializedPayoutMethod {
   type: string;
@@ -27,7 +33,6 @@ export interface SerializedProfile {
   bio: string | null;
   avatar_url: string | null;
   phone: string | null;
-  public_display: string;
   notifications: SerializedNotifications;
   payout_method: SerializedPayoutMethod;
   role: UserRole;
@@ -37,10 +42,24 @@ export interface SerializedProfile {
   updated_at: Date;
 }
 
+function payoutMethodDisplay(type: string): string {
+  const lower = type.toLowerCase();
+  if (lower === 'bkash') return 'bKash';
+  if (lower === 'nagad') return 'Nagad';
+  if (lower === 'rocket') return 'Rocket';
+  if (lower === 'bank') return 'Bank transfer';
+  return type;
+}
+
+function payoutLabel(type: string, account: string): string {
+  const display = payoutMethodDisplay(type);
+  return account ? `${display} · ${account}` : display;
+}
+
 const DEFAULT_PAYOUT: SerializedPayoutMethod = {
   type: 'bkash',
   account: '',
-  label: 'bKash · 018•••42',
+  label: 'bKash',
 };
 
 function asPrefs(
@@ -83,6 +102,7 @@ export class ProfileService {
     private readonly usersService: UsersService,
     private readonly audit: AuditEventsService,
     private readonly adminUsers: AdminUsersService,
+    private readonly uploadsService: UploadsService,
   ) {}
 
   async getSelf(userId: string): Promise<SerializedProfile> {
@@ -99,15 +119,12 @@ export class ProfileService {
       bio?: string;
       avatar_url?: string;
       phone?: string;
-      public_display?: string;
-      publicDisplay?: string;
     };
   }): Promise<SerializedProfile> {
     const found = await this.usersService.findById(input.userId);
     if (!found) throw ApiException.notFound('User');
 
     const displayName = input.body.display_name ?? input.body.name;
-    const publicDisplay = input.body.public_display ?? input.body.publicDisplay;
     const patch: {
       displayName?: string;
       bio?: string;
@@ -122,7 +139,8 @@ export class ProfileService {
     }
     if (
       input.body.avatar_url !== undefined &&
-      input.body.avatar_url.startsWith('http') &&
+      (input.body.avatar_url.startsWith('http') ||
+        input.body.avatar_url.startsWith('/')) &&
       input.body.avatar_url.length <= 512
     ) {
       patch.avatarUrl = input.body.avatar_url;
@@ -132,10 +150,6 @@ export class ProfileService {
     let prefsChanged = false;
     if (input.body.phone !== undefined) {
       prefs.phone = input.body.phone;
-      prefsChanged = true;
-    }
-    if (publicDisplay !== undefined) {
-      prefs.public_display = publicDisplay;
       prefsChanged = true;
     }
     if (prefsChanged) {
@@ -169,6 +183,7 @@ export class ProfileService {
       password?: string;
       new_password?: string;
       current_password?: string;
+      currentPassword?: string;
     };
   }): Promise<{ updatedAt: string }> {
     const found = await this.usersService.findById(input.userId);
@@ -179,14 +194,15 @@ export class ProfileService {
       throw ApiException.validation('Password must be at least 8 characters');
     }
 
-    if (input.body.current_password) {
-      const matches = await bcrypt.compare(
-        input.body.current_password,
-        found.passwordHash,
-      );
-      if (!matches) {
-        throw ApiException.validation('Current password is incorrect');
-      }
+    const currentPassword =
+      input.body.current_password ?? input.body.currentPassword;
+    if (!currentPassword) {
+      throw ApiException.validation('Current password is required');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, found.passwordHash);
+    if (!matches) {
+      throw ApiException.validation('Current password is incorrect');
     }
 
     const hash = await bcrypt.hash(newPass, 10);
@@ -281,10 +297,26 @@ export class ProfileService {
 
     const prefs = asPrefs(found.displayPrefs);
     const current = readPayout(prefs);
+    const type = (input.method ?? current.type).toLowerCase();
+
+    let account = current.account;
+    if (input.account !== undefined) {
+      const normalized = toBdLocalMobile(input.account);
+      if (!normalized) {
+        throw ApiException.validation(
+          'Enter a valid Bangladeshi mobile number.',
+        );
+      }
+      account = normalized;
+    }
+    if (!toBdLocalMobile(account)) {
+      throw ApiException.validation('A Bangladeshi mobile number is required.');
+    }
+
     const next: SerializedPayoutMethod = {
-      type: (input.method ?? current.type).toLowerCase(),
-      account: input.account ?? current.account,
-      label: input.label ?? current.label,
+      type,
+      account,
+      label: payoutLabel(type, account),
     };
     prefs.payout_method = next;
 
@@ -307,18 +339,69 @@ export class ProfileService {
 
   async updateAvatar(input: {
     userId: string;
+    file?: Express.Multer.File;
     dataUrl?: string;
     avatarUrl?: string;
   }): Promise<SerializedProfile> {
     const found = await this.usersService.findById(input.userId);
     if (!found) throw ApiException.notFound('User');
 
-    const candidate = input.avatarUrl ?? input.dataUrl ?? '';
-    if (candidate.startsWith('http') && candidate.length <= 512) {
+    let resolvedUrl: string | null = null;
+
+    if (input.file) {
+      if (input.file.size > MAX_AVATAR_SIZE) {
+        throw ApiException.validation('File too large. Maximum size is 5MB.');
+      }
+      if (!ALLOWED_AVATAR_MIMES.has(input.file.mimetype)) {
+        throw ApiException.validation(
+          `Invalid image format: ${input.file.mimetype}. Allowed formats are JPEG, PNG, WebP, and GIF.`,
+        );
+      }
+      const stored = await this.uploadsService.storeAttachment({
+        originalname: input.file.originalname,
+        mimetype: input.file.mimetype,
+        size: input.file.size,
+        path: input.file.path,
+      });
+      resolvedUrl = stored.url;
+    } else if (input.dataUrl && input.dataUrl.startsWith('data:')) {
+      const match = input.dataUrl.match(/^data:([a-zA-Z0-9/+-]+);base64,(.+)$/);
+      if (!match) {
+        throw ApiException.validation('Invalid data URL format for avatar.');
+      }
+      const mimetype = match[1];
+      const base64Data = match[2];
+      if (!ALLOWED_AVATAR_MIMES.has(mimetype)) {
+        throw ApiException.validation(
+          `Invalid image format: ${mimetype}. Allowed formats are JPEG, PNG, WebP, and GIF.`,
+        );
+      }
+      const buffer = Buffer.from(base64Data, 'base64');
+      if (buffer.length > MAX_AVATAR_SIZE) {
+        throw ApiException.validation('File too large. Maximum size is 5MB.');
+      }
+      const ext = mimetype.split('/')[1] ?? 'png';
+      const stored = await this.uploadsService.storeBuffer({
+        originalname: `avatar.${ext}`,
+        mimetype,
+        buffer,
+      });
+      resolvedUrl = stored.url;
+    } else if (input.avatarUrl || input.dataUrl) {
+      const candidate = input.avatarUrl ?? input.dataUrl ?? '';
+      if (
+        (candidate.startsWith('http') || candidate.startsWith('/')) &&
+        candidate.length <= 512
+      ) {
+        resolvedUrl = candidate;
+      }
+    }
+
+    if (resolvedUrl) {
       await this.dataSource.transaction(async (manager) => {
         await manager
           .getRepository(User)
-          .update({ id: input.userId }, { avatarUrl: candidate });
+          .update({ id: input.userId }, { avatarUrl: resolvedUrl });
         await this.audit.record(manager, {
           actorId: input.userId,
           action: 'profile.avatar_updated',
@@ -343,10 +426,6 @@ export class ProfileService {
       bio: u.bio,
       avatar_url: u.avatarUrl,
       phone: typeof prefs.phone === 'string' ? prefs.phone : null,
-      public_display:
-        typeof prefs.public_display === 'string'
-          ? prefs.public_display
-          : 'Public name',
       notifications: readNotifications(prefs),
       payout_method: readPayout(prefs),
       role: u.role,

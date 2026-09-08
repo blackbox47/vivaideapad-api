@@ -19,6 +19,7 @@ export interface AuthUserView {
   id: string;
   email: string;
   display_name: string | null;
+  avatar_url?: string | null;
   role: UserRole;
   access_status: string;
 }
@@ -83,6 +84,33 @@ export class AuthService {
       throw ApiException.forbidden('account_suspended', 'Account is suspended');
     }
     return this.issueTokens(user, input.ua);
+  }
+
+  /**
+   * Admin-only sign-in. Delegates credential verification to `signIn(...)`
+   * so the bcrypt check + suspended-account guard stay in a single place,
+   * then enforces the admin role gate AFTER a successful credential match.
+   * Non-admin (e.g. CONTRIBUTOR) users are rejected with a 403 — distinct
+   * from the 401 returned for bad credentials, so the SPA can show an
+   * "admin access required" message and the endpoint is not appropriate
+   * for password-spraying enumeration of admin accounts.
+   */
+  async signInAdmin(input: {
+    email: string;
+    password: string;
+    ua?: string;
+  }): Promise<AuthTokens> {
+    const tokens = await this.signIn(input);
+    if (
+      tokens.user.role !== USER_ROLES.ADMINISTRATOR &&
+      tokens.user.role !== USER_ROLES.SUPERADMIN
+    ) {
+      throw ApiException.forbidden(
+        'admin_required',
+        'Admin access is required to sign in here',
+      );
+    }
+    return tokens;
   }
 
   async refresh(input: {
@@ -237,6 +265,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         display_name: user.displayName,
+        avatar_url: user.avatarUrl,
         role: user.role,
         access_status: user.accessStatus,
       },
