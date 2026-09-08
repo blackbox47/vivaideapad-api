@@ -5,10 +5,15 @@
 const BD_LOCAL_MOBILE = /^01[3-9]\d{8}$/;
 
 export function normalizeBdMobileInput(value: string): string {
-  return value.trim().replace(/[\s\-()]/g, '').replace(/^\+/, '');
+  return value
+    .trim()
+    .replace(/[\s\-()]/g, '')
+    .replace(/^\+/, '');
 }
 
-export function toBdLocalMobile(value: string | null | undefined): string | null {
+export function toBdLocalMobile(
+  value: string | null | undefined,
+): string | null {
   if (typeof value !== 'string' || !value.trim()) {
     return null;
   }

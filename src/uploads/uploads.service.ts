@@ -21,6 +21,14 @@ const ALLOWED_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
+export const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB
+export const ALLOWED_AVATAR_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
 export interface StoredAttachment {
   url: string;
   mime_type: string;
@@ -79,6 +87,49 @@ export class UploadsService {
       mime_type: file.mimetype,
       size: file.size,
       original_name: file.originalname,
+      stored_path: targetPath,
+    };
+  }
+
+  async storeBuffer(params: {
+    originalname: string;
+    mimetype: string;
+    buffer: Buffer;
+  }): Promise<StoredAttachment> {
+    if (!ALLOWED_MIME.has(params.mimetype)) {
+      throw ApiException.validation(
+        `Unsupported file type: ${params.mimetype}`,
+      );
+    }
+    const maxBytes = this.config.get<number>('uploads.maxBytes')!;
+    if (params.buffer.length > maxBytes) {
+      throw ApiException.validation(
+        `File too large (${params.buffer.length} > ${maxBytes})`,
+      );
+    }
+
+    const uploadDir = this.config.get<string>('uploads.dir')!;
+    const now = new Date();
+    const yyyy = now.getUTCFullYear().toString();
+    const mm = (now.getUTCMonth() + 1).toString().padStart(2, '0');
+    const subdir = join(uploadDir, yyyy, mm);
+    await fs.mkdir(subdir, { recursive: true });
+
+    const safeExt = extname(params.originalname)
+      .toLowerCase()
+      .replace(/[^.\w]/g, '');
+    const storedName = `${randomUUID()}${safeExt}`;
+    const targetPath = join(subdir, storedName);
+    await fs.writeFile(targetPath, params.buffer);
+
+    const publicPrefix = this.config.get<string>('uploads.publicPrefix')!;
+    const url = `${publicPrefix}/${yyyy}/${mm}/${storedName}`;
+
+    return {
+      url,
+      mime_type: params.mimetype,
+      size: params.buffer.length,
+      original_name: params.originalname,
       stored_path: targetPath,
     };
   }

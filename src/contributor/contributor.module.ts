@@ -16,12 +16,7 @@ import { WalletService } from './wallet.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Submission,
-      LedgerEntry,
-      Notification,
-      Concept,
-    ]),
+    TypeOrmModule.forFeature([Submission, LedgerEntry, Notification, Concept]),
     ConceptsModule,
     NotificationsModule,
     PayoutsModule,

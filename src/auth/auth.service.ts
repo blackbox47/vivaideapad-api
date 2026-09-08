@@ -19,6 +19,7 @@ export interface AuthUserView {
   id: string;
   email: string;
   display_name: string | null;
+  avatar_url?: string | null;
   role: UserRole;
   access_status: string;
 }
@@ -264,6 +265,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         display_name: user.displayName,
+        avatar_url: user.avatarUrl,
         role: user.role,
         access_status: user.accessStatus,
       },

@@ -5,6 +5,7 @@ import { User } from '../../users/entities/user.entity';
 import { UsersModule } from '../../users/users.module';
 import { AuditEventsModule } from '../audit-events/audit-events.module';
 import { AdminUsersModule } from '../users/admin-users.module';
+import { UploadsModule } from '../../uploads/uploads.module';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
 
@@ -14,6 +15,7 @@ import { ProfileService } from './profile.service';
     UsersModule,
     AuditEventsModule,
     AdminUsersModule,
+    UploadsModule,
   ],
   controllers: [ProfileController],
   providers: [ProfileService],

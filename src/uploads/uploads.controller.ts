@@ -19,13 +19,23 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs, createReadStream } from 'fs';
-import { join, resolve, normalize } from 'path';
+import { extname, join, resolve, normalize } from 'path';
 import type { Request, Response } from 'express';
 
 import { Public } from '../common/decorators/roles.decorator';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
 import { ApiException } from '../common/exceptions/api-exception';
 import { UploadsService } from './uploads.service';
+
+const MIME_BY_EXT: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+};
 
 @ApiTags('Uploads')
 @Controller('uploads')
@@ -85,11 +95,39 @@ export class UploadsController {
   }
 
   @Public()
-  @Get('files/*')
+  @Get(['files/*', 'files/:year/:month/:filename'])
   @ApiOperation({ summary: 'Serve a stored attachment file' })
-  async serve(@Param() params: { '0': string }, @Res() res: Response) {
+  async serve(
+    @Param() params: Record<string, string>,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
     const uploadDir = this.config.get<string>('uploads.dir')!;
-    const rel = normalize(params['0']).replace(/^(\.\.[/\\])+/, '');
+    let rawPath =
+      params['0'] ??
+      (params.year && params.month && params.filename
+        ? `${params.year}/${params.month}/${params.filename}`
+        : '');
+
+    if (!rawPath && req.originalUrl) {
+      const match = req.originalUrl.match(/\/files\/(.+?)(\?.*)?$/);
+      if (match) {
+        rawPath = match[1];
+      }
+    }
+
+    if (!rawPath && req.url) {
+      const match = req.url.match(/\/files\/(.+?)(\?.*)?$/);
+      if (match) {
+        rawPath = match[1];
+      }
+    }
+
+    if (!rawPath) {
+      throw ApiException.notFound('File');
+    }
+
+    const rel = normalize(rawPath).replace(/^(\.\.[/\\])+/, '');
     const abs = resolve(join(uploadDir, rel));
     if (!abs.startsWith(resolve(uploadDir))) {
       throw ApiException.forbidden('path_traversal', 'Invalid path');
@@ -99,7 +137,10 @@ export class UploadsController {
     } catch {
       throw ApiException.notFound('File');
     }
-    res.setHeader('Content-Type', 'application/octet-stream');
+
+    const ext = extname(abs).toLowerCase();
+    const contentType = MIME_BY_EXT[ext] ?? 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
     createReadStream(abs).pipe(res);
   }
 }

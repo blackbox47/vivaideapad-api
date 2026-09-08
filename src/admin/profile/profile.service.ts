@@ -9,6 +9,11 @@ import { AuditEventsService } from '../audit-events/audit-events.service';
 import { User, UserRole } from '../../users/entities/user.entity';
 import { UsersService } from '../../users/users.service';
 import { AdminUsersService } from '../users/admin-users.service';
+import {
+  UploadsService,
+  MAX_AVATAR_SIZE,
+  ALLOWED_AVATAR_MIMES,
+} from '../../uploads/uploads.service';
 
 export interface SerializedPayoutMethod {
   type: string;
@@ -97,6 +102,7 @@ export class ProfileService {
     private readonly usersService: UsersService,
     private readonly audit: AuditEventsService,
     private readonly adminUsers: AdminUsersService,
+    private readonly uploadsService: UploadsService,
   ) {}
 
   async getSelf(userId: string): Promise<SerializedProfile> {
@@ -133,7 +139,8 @@ export class ProfileService {
     }
     if (
       input.body.avatar_url !== undefined &&
-      input.body.avatar_url.startsWith('http') &&
+      (input.body.avatar_url.startsWith('http') ||
+        input.body.avatar_url.startsWith('/')) &&
       input.body.avatar_url.length <= 512
     ) {
       patch.avatarUrl = input.body.avatar_url;
@@ -332,18 +339,69 @@ export class ProfileService {
 
   async updateAvatar(input: {
     userId: string;
+    file?: Express.Multer.File;
     dataUrl?: string;
     avatarUrl?: string;
   }): Promise<SerializedProfile> {
     const found = await this.usersService.findById(input.userId);
     if (!found) throw ApiException.notFound('User');
 
-    const candidate = input.avatarUrl ?? input.dataUrl ?? '';
-    if (candidate.startsWith('http') && candidate.length <= 512) {
+    let resolvedUrl: string | null = null;
+
+    if (input.file) {
+      if (input.file.size > MAX_AVATAR_SIZE) {
+        throw ApiException.validation('File too large. Maximum size is 5MB.');
+      }
+      if (!ALLOWED_AVATAR_MIMES.has(input.file.mimetype)) {
+        throw ApiException.validation(
+          `Invalid image format: ${input.file.mimetype}. Allowed formats are JPEG, PNG, WebP, and GIF.`,
+        );
+      }
+      const stored = await this.uploadsService.storeAttachment({
+        originalname: input.file.originalname,
+        mimetype: input.file.mimetype,
+        size: input.file.size,
+        path: input.file.path,
+      });
+      resolvedUrl = stored.url;
+    } else if (input.dataUrl && input.dataUrl.startsWith('data:')) {
+      const match = input.dataUrl.match(/^data:([a-zA-Z0-9/+-]+);base64,(.+)$/);
+      if (!match) {
+        throw ApiException.validation('Invalid data URL format for avatar.');
+      }
+      const mimetype = match[1];
+      const base64Data = match[2];
+      if (!ALLOWED_AVATAR_MIMES.has(mimetype)) {
+        throw ApiException.validation(
+          `Invalid image format: ${mimetype}. Allowed formats are JPEG, PNG, WebP, and GIF.`,
+        );
+      }
+      const buffer = Buffer.from(base64Data, 'base64');
+      if (buffer.length > MAX_AVATAR_SIZE) {
+        throw ApiException.validation('File too large. Maximum size is 5MB.');
+      }
+      const ext = mimetype.split('/')[1] ?? 'png';
+      const stored = await this.uploadsService.storeBuffer({
+        originalname: `avatar.${ext}`,
+        mimetype,
+        buffer,
+      });
+      resolvedUrl = stored.url;
+    } else if (input.avatarUrl || input.dataUrl) {
+      const candidate = input.avatarUrl ?? input.dataUrl ?? '';
+      if (
+        (candidate.startsWith('http') || candidate.startsWith('/')) &&
+        candidate.length <= 512
+      ) {
+        resolvedUrl = candidate;
+      }
+    }
+
+    if (resolvedUrl) {
       await this.dataSource.transaction(async (manager) => {
         await manager
           .getRepository(User)
-          .update({ id: input.userId }, { avatarUrl: candidate });
+          .update({ id: input.userId }, { avatarUrl: resolvedUrl });
         await this.audit.record(manager, {
           actorId: input.userId,
           action: 'profile.avatar_updated',

@@ -7,6 +7,7 @@ export const AuthUserSchema = z.object({
   id: z.uuid(),
   email: z.string().email(),
   display_name: z.string().nullable(),
+  avatar_url: z.string().nullable().optional(),
   role: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   access_status: z.enum(['active', 'invited', 'suspended', 'pending_review']),
 });
