@@ -10,7 +10,6 @@ import {
 
 export const CONCEPT_STATUSES = [
   'draft',
-  'scheduled',
   'active',
   'archived',
 ] as const;
@@ -40,6 +39,13 @@ export class Concept {
     default: 0,
   })
   rewardBudget!: string;
+
+  @Column({
+    type: 'boolean',
+    name: 'is_onboarding',
+    default: false,
+  })
+  isOnboarding!: boolean;
 
   @Column({
     type: 'enum',

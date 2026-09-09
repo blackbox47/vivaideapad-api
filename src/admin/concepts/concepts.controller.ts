@@ -27,6 +27,7 @@ import {
 } from '../../common/utils/pagination';
 import { ConceptsService } from './concepts.service';
 import {
+  BulkConceptActionDto,
   ConceptIdParamDto,
   ConceptListQueryDto,
   CreateConceptDto,
@@ -60,6 +61,14 @@ export class AdminConceptsController {
   @ApiCreatedResponse({ description: 'Concept created' })
   async create(@Body() body: CreateConceptDto) {
     return this.concepts.create(body);
+  }
+
+  @Post('bulk-action')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Perform bulk action on concepts' })
+  @ApiOkResponse({ description: 'Bulk action result' })
+  async bulkAction(@Body() body: BulkConceptActionDto) {
+    return this.concepts.bulkAction(body);
   }
 
   @Get(':id')

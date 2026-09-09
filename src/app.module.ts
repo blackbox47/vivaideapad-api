@@ -34,6 +34,7 @@ import { ReportsModule } from './admin/reports/reports.module';
 import { LedgerAdminModule } from './admin/ledger/ledger-admin.module';
 import { AdminsModule } from './admin/admins/admins.module';
 import { PaymentMethodsModule } from './admin/payment-methods/payment-methods.module';
+import { LandingModule } from './public/landing/landing.module';
 import { RolesGuard } from './common/guards/roles.guard';
 import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
 
@@ -73,6 +74,7 @@ import { JwtAccessGuard } from './auth/guards/jwt-access.guard';
     LedgerAdminModule,
     AdminsModule,
     PaymentMethodsModule,
+    LandingModule,
   ],
   providers: [
     {

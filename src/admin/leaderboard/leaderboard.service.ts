@@ -194,4 +194,94 @@ export class LeaderboardService {
       return { updated: newRows.length };
     });
   }
+
+  async findPublicTop(limit: number): Promise<
+    Array<{
+      rank: number;
+      initials: string;
+      name: string;
+      wins: number;
+      ideas: number;
+      amount: number;
+    }>
+  > {
+    const clampedLimit = Math.max(1, Math.min(20, limit));
+    const rows = await this.repo
+      .createQueryBuilder('lr')
+      .leftJoin('users', 'u', 'u.id = lr.user_id')
+      .where('lr.period = :p', { p: 'all_time' })
+      .andWhere('u.deleted_at IS NULL')
+      .andWhere('u.access_status = :status', { status: 'active' })
+      .select([
+        'lr.user_id AS user_id',
+        'u.email AS email',
+        'u.display_name AS display_name',
+        'u.display_prefs AS display_prefs',
+        'lr.score AS score',
+        'lr.approvals AS approvals',
+        'lr.submissions_count AS submissions_count',
+      ])
+      .orderBy('lr.score', 'DESC')
+      .addOrderBy('lr.approvals', 'DESC')
+      .addOrderBy('u.display_name', 'ASC')
+      .limit(clampedLimit * 2)
+      .getRawMany();
+
+    const result: Array<{
+      rank: number;
+      initials: string;
+      name: string;
+      wins: number;
+      ideas: number;
+      amount: number;
+    }> = [];
+
+    for (const r of rows) {
+      if (result.length >= clampedLimit) break;
+
+      let prefs: Record<string, unknown> | null = null;
+      if (typeof r.display_prefs === 'string') {
+        try {
+          prefs = JSON.parse(r.display_prefs);
+        } catch {
+          prefs = null;
+        }
+      } else if (r.display_prefs && typeof r.display_prefs === 'object') {
+        prefs = r.display_prefs as Record<string, unknown>;
+      }
+
+      if (
+        prefs?.visibility === 'Hidden' ||
+        prefs?.is_public_identity === false
+      ) {
+        continue;
+      }
+
+      const displayName =
+        typeof r.display_name === 'string' ? r.display_name.trim() : '';
+      const email = typeof r.email === 'string' ? r.email.trim() : '';
+      const name = displayName || (email ? email.split('@')[0] : 'Anonymous');
+
+      const parts = name.split(/\s+/).filter(Boolean);
+      let initials = '';
+      if (parts.length >= 2) {
+        initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      } else if (parts.length === 1 && parts[0].length > 0) {
+        initials = parts[0].slice(0, 2).toUpperCase();
+      } else {
+        initials = '?';
+      }
+
+      result.push({
+        rank: result.length + 1,
+        initials,
+        name,
+        wins: Number(r.approvals ?? 0),
+        ideas: Number(r.submissions_count ?? 0),
+        amount: Number(r.score ?? 0),
+      });
+    }
+
+    return result;
+  }
 }

@@ -111,7 +111,6 @@ export class DashboardService {
       this.concepts.count({ where: { deletedAt: IsNull() } }),
       this.countByEnum(this.concepts, 'status', [
         'draft',
-        'scheduled',
         'active',
         'archived',
       ]),
