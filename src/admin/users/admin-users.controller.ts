@@ -38,7 +38,7 @@ interface UpdateProfileBody {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const UpdateProfileSchema = z
   .object({
-    display_name: z.string().min(1).max(120).optional(),
+    display_name: z.string().min(1).max(30).optional(),
     bio: z.string().max(2000).optional(),
     avatar_url: z.string().url().optional(),
   })

@@ -26,8 +26,16 @@ import { USER_ROLES } from '../../users/entities/user.entity';
 import { MAX_AVATAR_SIZE } from '../../uploads/uploads.service';
 
 const UpdateProfileSchema = z.object({
-  display_name: z.string().min(1).max(120).optional(),
-  name: z.string().min(1).max(120).optional(),
+  display_name: z
+    .string()
+    .min(1)
+    .max(30, 'Display name must be at most 30 characters.')
+    .optional(),
+  name: z
+    .string()
+    .min(1)
+    .max(30, 'Display name must be at most 30 characters.')
+    .optional(),
   bio: z.string().max(2000).optional(),
   phone: z.string().max(40).optional(),
   avatar_url: z.string().max(512).optional(),
