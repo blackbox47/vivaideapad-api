@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -35,9 +36,58 @@ import { USER_ROLES } from '../../users/entities/user.entity';
 @ApiTags('Admin')
 @UseGuards(JwtAccessGuard)
 @Roles(USER_ROLES.ADMINISTRATOR)
-@Controller('admin/applications')
+@Controller(['admin/applications', 'admin/applicants'])
 export class AdminApplicationsController {
   constructor(private readonly apps: ApplicationsService) {}
+
+  @Patch()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decide an application (legacy PATCH format)' })
+  async patchDecide(
+    @Body() body: { id: string; status: string; comment?: string },
+    @CurrentUser() actor: { id: string },
+  ) {
+    let decision: 'approve_invite' | 'reject' | 'request_more_info' = 'approve_invite';
+    const s = (body.status || '').toLowerCase();
+    if (s === 'approved' || s === 'approve_invite' || s === 'approved_invited') {
+      decision = 'approve_invite';
+    } else if (s === 'rejected' || s === 'reject') {
+      decision = 'reject';
+    } else if (s.includes('revision') || s.includes('info')) {
+      decision = 'request_more_info';
+    }
+
+    return this.apps.decide({
+      id: body.id,
+      actorId: actor.id,
+      body: { decision, notes: body.comment },
+    });
+  }
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decide an application by ID (legacy PATCH format)' })
+  async patchDecideById(
+    @Param() params: ApplicationIdParamDto,
+    @Body() body: { status: string; comment?: string },
+    @CurrentUser() actor: { id: string },
+  ) {
+    let decision: 'approve_invite' | 'reject' | 'request_more_info' = 'approve_invite';
+    const s = (body.status || '').toLowerCase();
+    if (s === 'approved' || s === 'approve_invite' || s === 'approved_invited') {
+      decision = 'approve_invite';
+    } else if (s === 'rejected' || s === 'reject') {
+      decision = 'reject';
+    } else if (s.includes('revision') || s.includes('info')) {
+      decision = 'request_more_info';
+    }
+
+    return this.apps.decide({
+      id: params.id,
+      actorId: actor.id,
+      body: { decision, notes: body.comment },
+    });
+  }
 
   @Get()
   @ApiOperation({ summary: 'List applications' })

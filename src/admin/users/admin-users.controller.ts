@@ -51,6 +51,23 @@ const UpdateProfileSchema = z
 export class AdminUsersController {
   constructor(private readonly users: AdminUsersService) {}
 
+  @Patch()
+  @ApiOperation({ summary: 'Update user access_status (legacy format)' })
+  async patchStatus(
+    @Body() body: { id: string; status?: string; access_status?: string },
+    @CurrentUser() actor: { id: string },
+  ) {
+    const s = (body.status || body.access_status || '').toLowerCase() as
+      | 'active'
+      | 'suspended'
+      | 'invited';
+    return this.users.updateAccessStatus({
+      id: body.id,
+      actorId: actor.id,
+      body: { access_status: s },
+    });
+  }
+
   @Get()
   @ApiOperation({ summary: 'List users (admin)' })
   @ApiOkResponse({ description: 'Paginated users' })
