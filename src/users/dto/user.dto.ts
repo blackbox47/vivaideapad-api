@@ -19,7 +19,11 @@ export const UserSchema = z.object({
 export class UserDto extends createZodDto(UserSchema) {}
 
 export const UpdateProfileSchema = z.object({
-  display_name: z.string().min(1).max(120).optional(),
+  display_name: z
+    .string()
+    .min(1)
+    .max(30, 'Display name must be at most 30 characters.')
+    .optional(),
   bio: z.string().max(2000).optional(),
   avatar_url: z.string().url().max(512).optional(),
 });
