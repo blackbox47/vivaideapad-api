@@ -73,17 +73,21 @@ export class AuthService {
     ua?: string;
   }): Promise<AuthTokens> {
     const user = await this.users.findByEmail(input.email);
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw ApiException.unauthorized('Invalid email or password');
     }
     const matches = await bcrypt.compare(input.password, user.passwordHash);
     if (!matches) {
       throw ApiException.unauthorized('Invalid email or password');
     }
+    return this.signInForExistingUser(user, input.ua);
+  }
+
+  async signInForExistingUser(user: User, ua?: string): Promise<AuthTokens> {
     if (user.accessStatus === 'suspended') {
       throw ApiException.forbidden('account_suspended', 'Account is suspended');
     }
-    return this.issueTokens(user, input.ua);
+    return this.issueTokens(user, ua);
   }
 
   /**
@@ -167,7 +171,7 @@ export class AuthService {
     newPassword: string;
   }): Promise<void> {
     const user = await this.users.findById(input.userId);
-    if (!user) throw ApiException.notFound('User');
+    if (!user || !user.passwordHash) throw ApiException.notFound('User');
     const matches = await bcrypt.compare(
       input.currentPassword,
       user.passwordHash,

@@ -25,6 +25,8 @@ import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { TokensDto } from './dto/tokens.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
+import { GoogleSignInDto } from './google/dto/google-sign-in.dto';
+import { GoogleAuthService } from './google/google-auth.service';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
 import { PasswordChangeDto } from './dto/password-change.dto';
 
@@ -33,6 +35,7 @@ import { PasswordChangeDto } from './dto/password-change.dto';
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly googleAuth: GoogleAuthService,
     private readonly config: ConfigService,
   ) {}
 
@@ -71,6 +74,31 @@ export class AuthController {
     });
     // Tokens live in cookies only; the body carries the user view so the SPA
     // can hydrate Redux without a second request.
+    return { user: tokens.user };
+  }
+
+  @Public()
+  @ApiOperation({
+    summary: 'Google Sign-In for creators (credential exchange)',
+  })
+  @ApiOkResponse({
+    description: 'Tokens are set as HttpOnly cookies; body returns the user.',
+    type: TokensDto,
+  })
+  @Post('google/sign-in')
+  @HttpCode(HttpStatus.OK)
+  async googleSignIn(
+    @Body() input: GoogleSignInDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ua = req.headers['user-agent'] ?? '';
+    const tokens = await this.googleAuth.signIn({ ...input, ua });
+    setAuthCookies(res, this.config, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      user: { id: tokens.user.id, role: tokens.user.role },
+    });
     return { user: tokens.user };
   }
 

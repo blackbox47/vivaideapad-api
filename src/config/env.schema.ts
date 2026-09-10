@@ -37,6 +37,10 @@ export const EnvSchema = z.object({
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL: z.string().default('7d'),
 
+  // Google OAuth
+  GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
+  GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
+
   // Uploads
   UPLOAD_DIR: z.string().min(1).default('./uploads'),
   UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10_485_760),

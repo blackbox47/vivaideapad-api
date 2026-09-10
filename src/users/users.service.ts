@@ -29,21 +29,52 @@ export class UsersService {
     });
   }
 
+  findByGoogleId(googleId: string): Promise<User | null> {
+    return this.users.findOne({
+      where: { googleId, deletedAt: IsNull() },
+    });
+  }
+
   async create(input: {
     email: string;
-    passwordHash: string;
-    displayName?: string;
+    passwordHash?: string | null;
+    googleId?: string | null;
+    displayName?: string | null;
+    avatarUrl?: string | null;
     role?: UserRole;
     accessStatus?: AccessStatus;
   }): Promise<User> {
     const user = this.users.create({
       email: input.email.toLowerCase(),
-      passwordHash: input.passwordHash,
+      passwordHash: input.passwordHash ?? null,
+      googleId: input.googleId ?? null,
       displayName: input.displayName ?? null,
+      avatarUrl: input.avatarUrl ?? null,
       role: input.role ?? USER_ROLES.CONTRIBUTOR,
       accessStatus: input.accessStatus ?? 'invited',
     });
     return this.users.save(user);
+  }
+
+  async createGoogleIdentity(input: {
+    email: string;
+    googleId: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<User> {
+    return this.create({
+      email: input.email,
+      googleId: input.googleId,
+      passwordHash: null,
+      displayName: input.displayName ?? null,
+      avatarUrl: input.avatarUrl ?? null,
+      role: USER_ROLES.CONTRIBUTOR,
+      accessStatus: 'invited',
+    });
+  }
+
+  async setGoogleId(id: string, googleId: string | null): Promise<void> {
+    await this.users.update({ id }, { googleId });
   }
 
   async setPasswordHash(id: string, passwordHash: string): Promise<void> {

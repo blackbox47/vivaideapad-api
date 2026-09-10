@@ -36,10 +36,16 @@ export interface CookieConfigShape {
   sessionName: string;
 }
 
+export interface GoogleConfigShape {
+  clientId: string;
+  clientSecret: string;
+}
+
 export const APP_CONFIG = 'app';
 export const JWT_CONFIG = 'jwt';
 export const UPLOADS_CONFIG = 'uploads';
 export const COOKIE_CONFIG = 'cookie';
+export const GOOGLE_CONFIG = 'google';
 
 export const appConfig = registerAs<AppConfigShape>(APP_CONFIG, () => ({
   port: Number(process.env.PORT ?? 3000),
@@ -73,5 +79,13 @@ export const cookieConfig = registerAs<CookieConfigShape>(
     accessName: process.env.ACCESS_COOKIE_NAME ?? 'vivaideapad.access',
     refreshName: process.env.REFRESH_COOKIE_NAME ?? 'vivaideapad.refresh',
     sessionName: process.env.SESSION_COOKIE_NAME ?? 'vivaideapad.session',
+  }),
+);
+
+export const googleConfig = registerAs<GoogleConfigShape>(
+  GOOGLE_CONFIG,
+  () => ({
+    clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
   }),
 );
