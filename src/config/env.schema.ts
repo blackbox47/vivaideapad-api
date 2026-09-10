@@ -19,7 +19,7 @@ export const EnvSchema = z.object({
 
   // MySQL
   DB_HOST: z.string().min(1).default('localhost'),
-  DB_PORT: z.coerce.number().int().positive().default(3307),
+  DB_PORT: z.coerce.number().int().positive().default(3306),
   DB_USERNAME: z.string().min(1).default('vivaidea'),
   DB_PASSWORD: z.string().min(1).default('vivaidea'),
   DB_NAME: z.string().min(1).default('vivaidea'),
