@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
@@ -10,10 +10,12 @@ import { WalletService } from '../../contributor/wallet.service';
 import { PayoutRequest, PayoutStatus } from './payout.entity';
 import { LedgerEntry } from '../../contributor/entities/ledger-entry.entity';
 import { CreatePayoutDto, ProcessPayoutDto } from './dto/payouts.dto';
+import { User } from '../../users/entities/user.entity';
 
 export interface SerializedPayout {
   id: string;
   user_id: string;
+  display_name: string | null;
   amount: string;
   status: PayoutStatus;
   method: string | null;
@@ -26,9 +28,13 @@ export interface SerializedPayout {
   updated_at: Date;
 }
 
-const toSerialized = (p: PayoutRequest): SerializedPayout => ({
+const toSerialized = (
+  p: PayoutRequest,
+  displayName: string | null = null,
+): SerializedPayout => ({
   id: p.id,
   user_id: p.userId,
+  display_name: displayName,
   amount: p.amount,
   status: p.status,
   method: p.method,
@@ -52,6 +58,27 @@ export class PayoutsService {
     private readonly wallet: WalletService,
   ) {}
 
+  private async serializeWithNames(
+    rows: PayoutRequest[],
+  ): Promise<SerializedPayout[]> {
+    const ids = [...new Set(rows.map((row) => row.userId))];
+    const users = ids.length
+      ? await this.dataSource.getRepository(User).find({
+          where: { id: In(ids) },
+          select: ['id', 'displayName', 'email'],
+        })
+      : [];
+    const nameById = new Map(
+      users.map((user) => {
+        const name = user.displayName?.trim() || user.email.trim();
+        return [user.id, name || null] as const;
+      }),
+    );
+    return rows.map((row) =>
+      toSerialized(row, nameById.get(row.userId) ?? null),
+    );
+  }
+
   async list(input: {
     status?: PayoutStatus;
     user_id?: string;
@@ -71,7 +98,7 @@ export class PayoutsService {
       .skip((input.page - 1) * input.limit)
       .take(input.limit);
     const [rows, total] = await qb.getManyAndCount();
-    return { data: rows.map(toSerialized), total };
+    return { data: await this.serializeWithNames(rows), total };
   }
 
   async findOne(id: string): Promise<SerializedPayout> {
@@ -79,7 +106,8 @@ export class PayoutsService {
       where: { id, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Payout');
-    return toSerialized(found);
+    const [serialized] = await this.serializeWithNames([found]);
+    return serialized;
   }
 
   async listMine(input: {
@@ -95,7 +123,7 @@ export class PayoutsService {
       .skip((input.page - 1) * input.limit)
       .take(input.limit);
     const [rows, total] = await qb.getManyAndCount();
-    return { data: rows.map(toSerialized), total };
+    return { data: await this.serializeWithNames(rows), total };
   }
 
   /**
@@ -186,22 +214,49 @@ export class PayoutsService {
     };
     const detailsToSave = Object.keys(details).length > 0 ? details : null;
 
-    const row = this.repo.create({
-      userId: input.userId,
-      amount: amount.toFixed(2),
-      status: 'pending',
-      method: input.body.method ?? null,
-      details: detailsToSave,
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(PayoutRequest);
+      const row = repo.create({
+        userId: input.userId,
+        amount: amount.toFixed(2),
+        status: 'pending',
+        method: input.body.method ?? null,
+        details: detailsToSave,
+      });
+      const saved = await repo.save(row);
+
+      await this.wallet.recordInTx(manager, {
+        userId: input.userId,
+        type: 'payout_hold',
+        amount: (-amount).toFixed(2),
+        status: 'pending',
+        reference: `payout:${saved.id}`,
+        metadata: {
+          payout_id: saved.id,
+          description: input.body.method
+            ? mobileNum
+              ? `${input.body.method} · ${mobileNum}`
+              : `${input.body.method} payout`
+            : 'Withdrawal request',
+        },
+      });
+
+      await this.audit.record(manager, {
+        actorId: input.actorId,
+        action: 'payout.created',
+        targetType: 'payout',
+        targetId: saved.id,
+        context: { user_id: input.userId, amount: amount.toFixed(2) },
+      });
+
+      const users = await manager.getRepository(User).find({
+        where: { id: input.userId },
+        select: ['id', 'displayName', 'email'],
+      });
+      const name =
+        users[0]?.displayName?.trim() || users[0]?.email?.trim() || null;
+      return toSerialized(saved, name);
     });
-    const saved = await this.repo.save(row);
-    await this.audit.recordStandalone({
-      actorId: input.actorId,
-      action: 'payout.created',
-      targetType: 'payout',
-      targetId: saved.id,
-      context: { user_id: input.userId, amount: amount.toFixed(2) },
-    });
-    return toSerialized(saved);
   }
 
   /**
@@ -215,6 +270,38 @@ export class PayoutsService {
     body: ProcessPayoutDto;
   }): Promise<SerializedPayout> {
     const { id, actorId, body } = input;
+
+    const rawAction = (body.action || body.status || '').toLowerCase();
+    let nextStatus: PayoutStatus;
+    let actionName: 'mark_paid' | 'reject';
+
+    if (rawAction === 'mark_paid' || rawAction === 'paid') {
+      nextStatus = 'paid';
+      actionName = 'mark_paid';
+    } else if (rawAction === 'reject' || rawAction === 'rejected') {
+      nextStatus = 'rejected';
+      actionName = 'reject';
+    } else {
+      throw ApiException.validation('Unknown action or status');
+    }
+
+    const reference =
+      (
+        body.reference ??
+        body.processing_reference ??
+        body.transaction_reference ??
+        ''
+      ).trim() || null;
+
+    const note =
+      (
+        body.note ??
+        body.notes ??
+        body.admin_notes ??
+        body.decision_notes ??
+        body.rejection_reason ??
+        ''
+      ).trim() || null;
 
     let savedNotification: Notification | null = null;
 
@@ -239,54 +326,54 @@ export class PayoutsService {
       const pendingLedger = await ledgerRepo.findOne({
         where: { reference: `payout:${id}`, status: 'pending' },
       });
-      if (!pendingLedger) {
-        throw ApiException.businessRule(
-          'ledger_missing',
-          'Pending hold entry not found',
-        );
-      }
 
-      let nextStatus: PayoutStatus;
-      switch (body.action) {
-        case 'mark_paid':
-          nextStatus = 'paid';
-          break;
-        case 'reject':
-          nextStatus = 'rejected';
-          break;
-        default:
-          throw ApiException.validation('Unknown action');
+      if (pendingLedger) {
+        if (actionName === 'mark_paid') {
+          pendingLedger.status = 'posted';
+          pendingLedger.postedAt = new Date();
+          await ledgerRepo.save(pendingLedger);
+        } else {
+          // reject — flip the pending hold to reversed so the hold is released
+          // and the contributor's available balance is restored.
+          pendingLedger.status = 'reversed';
+          await ledgerRepo.save(pendingLedger);
+        }
+      } else if (actionName === 'mark_paid') {
+        // Fallback for payouts seeded or created without a pending hold entry
+        await this.wallet.recordInTx(manager, {
+          userId: found.userId,
+          type: 'payout_hold',
+          amount: (-Number(found.amount)).toFixed(2),
+          status: 'posted',
+          reference: `payout:${id}`,
+          metadata: {
+            payout_id: id,
+            description: found.method
+              ? `${found.method} payout`
+              : 'Withdrawal request',
+            processing_reference: reference ?? undefined,
+          },
+        });
       }
 
       found.status = nextStatus;
       found.processedAt = new Date();
       found.processedBy = actorId;
-      found.processingReference = body.reference ?? null;
-      found.decisionNotes = body.note ?? null;
+      found.processingReference = reference;
+      found.decisionNotes = note;
       const saved = await repo.save(found);
-
-      if (body.action === 'mark_paid') {
-        pendingLedger.status = 'posted';
-        pendingLedger.postedAt = new Date();
-        await ledgerRepo.save(pendingLedger);
-      } else {
-        // reject — flip the pending hold to reversed so the hold is released
-        // and the contributor's available balance is restored.
-        pendingLedger.status = 'reversed';
-        await ledgerRepo.save(pendingLedger);
-      }
 
       await this.audit.record(manager, {
         actorId,
-        action: `payout.${body.action}`,
+        action: `payout.${actionName}`,
         targetType: 'payout',
         targetId: found.id,
         category: 'payouts',
         context: {
           previous_status: 'pending',
           new_status: nextStatus,
-          reference: body.reference ?? null,
-          note: body.note ?? null,
+          reference,
+          note,
         },
       });
 
@@ -294,16 +381,22 @@ export class PayoutsService {
         recipientId: found.userId,
         type: 'payout_status_changed',
         title:
-          body.action === 'mark_paid'
+          actionName === 'mark_paid'
             ? `Your payout of ৳${found.amount} has been paid`
             : `Your payout request was rejected`,
-        body: body.note ?? undefined,
+        body: note ?? undefined,
         linkedRecordType: 'payout',
         linkedRecordId: found.id,
-        payload: { action: body.action, status: nextStatus },
+        payload: { action: actionName, status: nextStatus, reference },
       });
 
-      return toSerialized(saved);
+      const users = await manager.getRepository(User).find({
+        where: { id: found.userId },
+        select: ['id', 'displayName', 'email'],
+      });
+      const name =
+        users[0]?.displayName?.trim() || users[0]?.email?.trim() || null;
+      return toSerialized(saved, name);
     });
 
     if (savedNotification) {

@@ -12,6 +12,7 @@ import {
   Submission,
   SubmissionStatus,
 } from '../../contributor/entities/submission.entity';
+import { Concept } from '../concepts/concept.entity';
 import {
   AdminSubmissionDecisionDto,
   RiskScanResultDto,
@@ -113,9 +114,20 @@ export class AdminSubmissionsService {
       }
 
       let nextStatus: SubmissionStatus;
+      let effectiveReward = body.reward_amount;
       switch (body.decision) {
         case 'approve':
-          if (!body.reward_amount || body.reward_amount <= 0) {
+          if (!effectiveReward || effectiveReward <= 0) {
+            const conceptRepo = manager.getRepository(Concept);
+            const concept = await conceptRepo.findOne({
+              where: { id: found.conceptId, deletedAt: IsNull() },
+            });
+            const conceptBudget = concept ? Number(concept.rewardBudget) : 0;
+            if (conceptBudget > 0) {
+              effectiveReward = conceptBudget;
+            }
+          }
+          if (!effectiveReward || effectiveReward <= 0) {
             throw ApiException.validation(
               'reward_amount is required and must be > 0 when approving',
             );
@@ -136,21 +148,21 @@ export class AdminSubmissionsService {
       found.decisionNotes = body.notes ?? null;
       found.decidedAt = new Date();
       found.decidedBy = actorId;
-      if (body.decision === 'approve') {
-        found.rewardAmount = body.reward_amount!.toFixed(2);
+      if (body.decision === 'approve' && effectiveReward) {
+        found.rewardAmount = effectiveReward.toFixed(2);
       }
       const saved = await repo.save(found);
 
       // Atomic side-effects: reward_credit ledger + leaderboard upsert.
       if (
         body.decision === 'approve' &&
-        body.reward_amount &&
-        body.reward_amount > 0
+        effectiveReward &&
+        effectiveReward > 0
       ) {
         await this.wallet.recordInTx(manager, {
           userId: found.userId,
           type: 'reward_credit',
-          amount: body.reward_amount.toFixed(2),
+          amount: effectiveReward.toFixed(2),
           status: 'posted',
           reference: `submission:${found.id}`,
           metadata: { submission_id: found.id, title: found.title },
@@ -158,7 +170,7 @@ export class AdminSubmissionsService {
         await this.leaderboard.incrementInTx(manager, {
           userId: found.userId,
           period: 'all_time',
-          scoreDelta: body.reward_amount.toFixed(2),
+          scoreDelta: effectiveReward.toFixed(2),
           approvalIncrement: 1,
         });
       }
@@ -172,7 +184,7 @@ export class AdminSubmissionsService {
         context: {
           previous_status: 'pending_review',
           new_status: nextStatus,
-          reward_amount: body.reward_amount ?? null,
+          reward_amount: effectiveReward ?? null,
           notes: body.notes ?? null,
         },
       });
@@ -183,14 +195,14 @@ export class AdminSubmissionsService {
           body.decision === 'request_changes'
             ? 'submission_request_revision'
             : 'submission_decision',
-        title: titleForSubmissionDecision(body.decision, body.reward_amount),
+        title: titleForSubmissionDecision(body.decision, effectiveReward),
         body: body.notes ?? undefined,
         linkedRecordType: 'submission',
         linkedRecordId: found.id,
         payload: {
           decision: body.decision,
           status: nextStatus,
-          reward_amount: body.reward_amount ?? null,
+          reward_amount: effectiveReward ?? null,
         },
       });
 

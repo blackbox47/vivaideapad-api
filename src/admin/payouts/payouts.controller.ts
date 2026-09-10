@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -12,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
+
+import { ApiException } from '../../common/exceptions/api-exception';
 
 import { JwtAccessGuard } from '../../auth/guards/jwt-access.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -77,6 +80,29 @@ export class AdminPayoutsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'mark_paid or reject a payout (transactional)' })
   async process(
+    @Param() params: PayoutIdParamDto,
+    @Body() body: ProcessPayoutDto,
+    @Req() req: Request,
+  ) {
+    const actor = req.user as { sub: string };
+    return this.payouts.process({ id: params.id, actorId: actor.sub, body });
+  }
+
+  @Patch()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Process payout via PATCH /admin/payouts' })
+  async decide(@Body() body: ProcessPayoutDto, @Req() req: Request) {
+    if (!body.id) {
+      throw ApiException.validation('Payout id is required');
+    }
+    const actor = req.user as { sub: string };
+    return this.payouts.process({ id: body.id, actorId: actor.sub, body });
+  }
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Process payout via PATCH /admin/payouts/:id' })
+  async decideWithId(
     @Param() params: PayoutIdParamDto,
     @Body() body: ProcessPayoutDto,
     @Req() req: Request,

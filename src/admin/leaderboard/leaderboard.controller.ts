@@ -11,6 +11,7 @@ import { USER_ROLES } from '../../users/entities/user.entity';
 const ListQuerySchema = z.object({
   period: z.enum(['all_time', 'monthly', 'weekly']).default('all_time'),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+  search: z.string().optional(),
 });
 class ListQueryDto extends createZodDto(ListQuerySchema) {}
 
@@ -28,6 +29,7 @@ export class LeaderboardController {
     const rows = await this.leaderboard.list({
       period: query.period,
       limit: query.limit ?? 25,
+      search: query.search,
     });
     return { period: query.period, data: rows };
   }

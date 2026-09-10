@@ -202,7 +202,9 @@ export class ConceptsService {
     switch (input.action) {
       case 'set_status': {
         if (!input.status) {
-          throw ApiException.validation('status is required for set_status action');
+          throw ApiException.validation(
+            'status is required for set_status action',
+          );
         }
         const now = new Date();
         const nextStatus = input.status;
@@ -232,7 +234,10 @@ export class ConceptsService {
       }
 
       case 'set_is_onboarding': {
-        const flag = input.is_onboarding !== undefined ? Boolean(input.is_onboarding) : true;
+        const flag =
+          input.is_onboarding !== undefined
+            ? Boolean(input.is_onboarding)
+            : true;
         for (const row of rows) {
           row.isOnboarding = flag;
           row.metadata = {

@@ -37,14 +37,16 @@ describe('ProfileService avatar upload', () => {
 
   beforeEach(() => {
     mockDataSource = {
-      transaction: jest.fn(async (cb: (manager: unknown) => Promise<unknown>) => {
-        const mockManager = {
-          getRepository: () => ({
-            update: jest.fn().mockResolvedValue({ affected: 1 }),
-          }),
-        };
-        return cb(mockManager);
-      }),
+      transaction: jest.fn(
+        async (cb: (manager: unknown) => Promise<unknown>) => {
+          const mockManager = {
+            getRepository: () => ({
+              update: jest.fn().mockResolvedValue({ affected: 1 }),
+            }),
+          };
+          return cb(mockManager);
+        },
+      ),
     };
     mockUsersService = {
       findById: jest.fn().mockResolvedValue({ ...mockUser }),

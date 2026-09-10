@@ -55,6 +55,7 @@ export class ReviewQueueController {
       id: body.id,
       status: body.status,
       comment: body.comment,
+      reward_amount: body.reward_amount,
     });
   }
 }
