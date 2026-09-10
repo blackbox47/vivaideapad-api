@@ -196,7 +196,7 @@ export class ProfileService {
 
     const currentPassword =
       input.body.current_password ?? input.body.currentPassword;
-    if (!currentPassword) {
+    if (!currentPassword || !found.passwordHash) {
       throw ApiException.validation('Current password is required');
     }
 

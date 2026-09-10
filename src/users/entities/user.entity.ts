@@ -65,6 +65,7 @@ export type AccessStatus = (typeof ACCESS_STATUSES)[number];
 @Entity('users')
 @Index('idx_users_email', ['email'], { unique: true })
 @Index('idx_users_role', ['role'])
+@Index('idx_users_google_id', ['googleId'], { unique: true })
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -72,8 +73,16 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   email!: string;
 
-  @Column({ type: 'varchar', length: 255, name: 'password_hash' })
-  passwordHash!: string;
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'password_hash',
+  })
+  passwordHash!: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'google_id' })
+  googleId!: string | null;
 
   @Column({
     type: 'varchar',
@@ -102,6 +111,21 @@ export class User {
 
   @Column({ type: 'json', nullable: true, name: 'display_prefs' })
   displayPrefs!: Record<string, unknown> | null;
+
+  @Column({
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    name: 'verification_token',
+  })
+  verificationToken!: string | null;
+
+  @Column({
+    type: 'datetime',
+    nullable: true,
+    name: 'verification_token_expires_at',
+  })
+  verificationTokenExpiresAt!: Date | null;
 
   @CreateDateColumn({
     type: 'datetime',

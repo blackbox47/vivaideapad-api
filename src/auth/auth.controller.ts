@@ -25,6 +25,8 @@ import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { TokensDto } from './dto/tokens.dto';
 import { SignInDto } from './dto/sign-in.dto';
 import { SignUpDto } from './dto/sign-up.dto';
+import { GoogleSignInDto } from './google/dto/google-sign-in.dto';
+import { GoogleAuthService } from './google/google-auth.service';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
 import { PasswordChangeDto } from './dto/password-change.dto';
 
@@ -33,20 +35,30 @@ import { PasswordChangeDto } from './dto/password-change.dto';
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly googleAuth: GoogleAuthService,
     private readonly config: ConfigService,
   ) {}
 
   @Public()
   @Post('sign-up')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new account (no JWT returned)' })
+  @ApiOperation({
+    summary: 'Public contributor sign-up (no JWT returned)',
+    description:
+      'Creates an account with accessStatus=pending_review and emails a ' +
+      'verification link. The user cannot sign in until an admin approves ' +
+      'them via POST /admin/applications/:id/decision.',
+  })
   @ApiCreatedResponse({
-    description: 'Account created',
-    schema: { type: 'object', properties: { id: { type: 'string' } } },
+    description: 'Verification email queued.',
+    schema: {
+      type: 'object',
+      properties: { email: { type: 'string' } },
+    },
   })
   async signUp(@Body() input: SignUpDto) {
-    const user = await this.auth.signUp(input);
-    return { id: user.id };
+    const result = await this.auth.signUp(input);
+    return { email: result.email };
   }
 
   @Public()
@@ -72,6 +84,49 @@ export class AuthController {
     // Tokens live in cookies only; the body carries the user view so the SPA
     // can hydrate Redux without a second request.
     return { user: tokens.user };
+  }
+
+  @Public()
+  @ApiOperation({
+    summary: 'Google Sign-In for creators (credential exchange)',
+  })
+  @ApiOkResponse({
+    description: 'Tokens are set as HttpOnly cookies; body returns the user.',
+    type: TokensDto,
+  })
+  @Post('google/sign-in')
+  @HttpCode(HttpStatus.OK)
+  async googleSignIn(
+    @Body() input: GoogleSignInDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ua = req.headers['user-agent'] ?? '';
+    const tokens = await this.googleAuth.signIn({ ...input, ua });
+    setAuthCookies(res, this.config, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      user: { id: tokens.user.id, role: tokens.user.role },
+    });
+    return { user: tokens.user };
+  }
+
+  @Public()
+  @Post('google/sign-up')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Public contributor sign-up via Google (no JWT returned)',
+    description:
+      'Verifies the Google ID token, creates a pending_review user if ' +
+      'new, or rejects if the account already exists. Always returns ' +
+      '{ email } and never issues tokens.',
+  })
+  @ApiCreatedResponse({
+    description: 'Verification email queued.',
+    schema: { type: 'object', properties: { email: { type: 'string' } } },
+  })
+  async googleSignUp(@Body() input: GoogleSignInDto) {
+    return this.googleAuth.signUp(input);
   }
 
   @Public()
