@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 
-import { ApiException, ApiErrorBody } from '../../common/exceptions/api-exception';
+import {
+  ApiException,
+  ApiErrorBody,
+} from '../../common/exceptions/api-exception';
 import { UsersService } from '../../users/users.service';
 import { User, USER_ROLES } from '../../users/entities/user.entity';
 import { AuthService } from '../auth.service';

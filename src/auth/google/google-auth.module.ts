@@ -4,10 +4,16 @@ import { OAuth2Client } from 'google-auth-library';
 
 import { UsersModule } from '../../users/users.module';
 import { AuthModule } from '../auth.module';
+import { MailerModule } from '../mailer/mailer.module';
 import { GoogleAuthService, GOOGLE_OAUTH_CLIENT } from './google-auth.service';
 
 @Module({
-  imports: [UsersModule, forwardRef(() => AuthModule), ConfigModule],
+  imports: [
+    UsersModule,
+    forwardRef(() => AuthModule),
+    MailerModule,
+    ConfigModule,
+  ],
   providers: [
     {
       provide: GOOGLE_OAUTH_CLIENT,

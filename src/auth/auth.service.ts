@@ -1,18 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import ms from 'ms';
 
+import { AuditEventsService } from '../admin/audit-events/audit-events.service';
 import { ApiException } from '../common/exceptions/api-exception';
 import { UsersService } from '../users/users.service';
 import { User, UserRole, USER_ROLES } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { MAILER_SERVICE } from './mailer/mailer.service';
+import type { MailerService } from './mailer/mailer.service';
 import type { JwtAccessPayload } from './strategies/jwt-access.strategy';
 import type { JwtRefreshPayload } from './strategies/jwt-refresh.strategy';
+import type { SignUpInput } from './dto/sign-up.dto';
 import { parseTtl, parseTtlSeconds } from './auth.service-helpers';
 
 export interface AuthUserView {
@@ -32,6 +36,8 @@ export interface AuthTokens {
   user: AuthUserView;
 }
 
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -40,31 +46,88 @@ export class AuthService {
     private readonly config: ConfigService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokens: Repository<RefreshToken>,
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly audit: AuditEventsService,
+    @Inject(MAILER_SERVICE) private readonly mailer: MailerService,
   ) {}
 
   // ------------------------------------------------------------------
   // Public methods
   // ------------------------------------------------------------------
 
-  async signUp(input: {
-    email: string;
-    password: string;
-    displayName?: string;
-    role?: UserRole;
-  }): Promise<User> {
+  /**
+   * Public contributor sign-up. Creates a user with `accessStatus =
+   * 'pending_review'` and emails a verification link. **Never** issues JWTs
+   * or sets auth cookies — the user must complete admin review before they
+   * can sign in.
+   *
+   * Idempotent on email collision: a second call from the same browser
+   * against an already `pending_review` user regenerates the verification
+   * token and re-sends the email without creating a duplicate row.
+   */
+  async signUp(input: SignUpInput): Promise<{ id: string; email: string }> {
     const email = input.email.toLowerCase();
+
     const existing = await this.users.findByEmail(email);
+
     if (existing) {
-      throw ApiException.conflict('email_taken', 'Email is already in use');
+      if (existing.accessStatus === 'pending_review') {
+        // Re-issue the verification token for the same in-flight user.
+        const token = randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+        await this.users.setVerificationToken(existing.id, token, expiresAt);
+        await this.mailer.sendVerificationLink({
+          email,
+          displayName: existing.displayName,
+          token,
+        });
+        return { id: existing.id, email };
+      }
+      throw ApiException.conflict(
+        'email_already_registered',
+        'Email is already registered. Please sign in instead.',
+      );
     }
+
     const passwordHash = await bcrypt.hash(input.password, 10);
-    return this.users.create({
-      email,
-      passwordHash,
-      displayName: input.displayName,
-      role: input.role ?? USER_ROLES.CONTRIBUTOR,
-      accessStatus: 'invited',
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+
+    const user = await this.dataSource.transaction(async (manager) => {
+      const usersRepo = manager.getRepository(User);
+      const created = await usersRepo.save(
+        usersRepo.create({
+          email,
+          passwordHash,
+          googleId: null,
+          displayName: input.full_name,
+          avatarUrl: null,
+          role: USER_ROLES.CONTRIBUTOR,
+          accessStatus: 'pending_review',
+          verificationToken: token,
+          verificationTokenExpiresAt: expiresAt,
+        }),
+      );
+
+      await this.audit.record(manager, {
+        actorId: created.id,
+        action: 'user.sign_up_initiated',
+        targetType: 'user',
+        targetId: created.id,
+        category: 'users',
+        context: { email },
+      });
+
+      return created;
     });
+
+    await this.mailer.sendVerificationLink({
+      email,
+      displayName: user.displayName,
+      token,
+    });
+
+    return { id: user.id, email };
   }
 
   async signIn(input: {
@@ -86,6 +149,12 @@ export class AuthService {
   async signInForExistingUser(user: User, ua?: string): Promise<AuthTokens> {
     if (user.accessStatus === 'suspended') {
       throw ApiException.forbidden('account_suspended', 'Account is suspended');
+    }
+    if (user.accessStatus === 'pending_review') {
+      throw ApiException.forbidden(
+        'account_pending_review',
+        'Your account is awaiting review. Please check your email for next steps.',
+      );
     }
     return this.issueTokens(user, ua);
   }
@@ -128,6 +197,12 @@ export class AuthService {
     if (!user) throw ApiException.unauthorized('User no longer exists');
     if (user.accessStatus === 'suspended') {
       throw ApiException.forbidden('account_suspended', 'Account is suspended');
+    }
+    if (user.accessStatus === 'pending_review') {
+      throw ApiException.forbidden(
+        'account_pending_review',
+        'Account is awaiting review',
+      );
     }
 
     // The strategy already verified hash matches and the row exists and is

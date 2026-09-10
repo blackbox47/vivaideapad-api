@@ -35,6 +35,30 @@ export class UsersService {
     });
   }
 
+  findByVerificationToken(token: string): Promise<User | null> {
+    return this.users.findOne({
+      where: { verificationToken: token, deletedAt: IsNull() },
+    });
+  }
+
+  async setVerificationToken(
+    id: string,
+    token: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.users.update(
+      { id },
+      { verificationToken: token, verificationTokenExpiresAt: expiresAt },
+    );
+  }
+
+  async clearVerificationToken(id: string): Promise<void> {
+    await this.users.update(
+      { id },
+      { verificationToken: null, verificationTokenExpiresAt: null },
+    );
+  }
+
   async create(input: {
     email: string;
     passwordHash?: string | null;

@@ -112,6 +112,21 @@ export class User {
   @Column({ type: 'json', nullable: true, name: 'display_prefs' })
   displayPrefs!: Record<string, unknown> | null;
 
+  @Column({
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    name: 'verification_token',
+  })
+  verificationToken!: string | null;
+
+  @Column({
+    type: 'datetime',
+    nullable: true,
+    name: 'verification_token_expires_at',
+  })
+  verificationTokenExpiresAt!: Date | null;
+
   @CreateDateColumn({
     type: 'datetime',
     name: 'created_at',
