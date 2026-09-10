@@ -47,9 +47,14 @@ export class AdminApplicationsController {
     @Body() body: { id: string; status: string; comment?: string },
     @CurrentUser() actor: { id: string },
   ) {
-    let decision: 'approve_invite' | 'reject' | 'request_more_info' = 'approve_invite';
+    let decision: 'approve_invite' | 'reject' | 'request_more_info' =
+      'approve_invite';
     const s = (body.status || '').toLowerCase();
-    if (s === 'approved' || s === 'approve_invite' || s === 'approved_invited') {
+    if (
+      s === 'approved' ||
+      s === 'approve_invite' ||
+      s === 'approved_invited'
+    ) {
       decision = 'approve_invite';
     } else if (s === 'rejected' || s === 'reject') {
       decision = 'reject';
@@ -66,15 +71,22 @@ export class AdminApplicationsController {
 
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Decide an application by ID (legacy PATCH format)' })
+  @ApiOperation({
+    summary: 'Decide an application by ID (legacy PATCH format)',
+  })
   async patchDecideById(
     @Param() params: ApplicationIdParamDto,
     @Body() body: { status: string; comment?: string },
     @CurrentUser() actor: { id: string },
   ) {
-    let decision: 'approve_invite' | 'reject' | 'request_more_info' = 'approve_invite';
+    let decision: 'approve_invite' | 'reject' | 'request_more_info' =
+      'approve_invite';
     const s = (body.status || '').toLowerCase();
-    if (s === 'approved' || s === 'approve_invite' || s === 'approved_invited') {
+    if (
+      s === 'approved' ||
+      s === 'approve_invite' ||
+      s === 'approved_invited'
+    ) {
       decision = 'approve_invite';
     } else if (s === 'rejected' || s === 'reject') {
       decision = 'reject';

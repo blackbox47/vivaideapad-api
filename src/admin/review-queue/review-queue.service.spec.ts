@@ -1,4 +1,9 @@
-import { __testing } from './review-queue.service';
+import { Not, Repository } from 'typeorm';
+import { ReviewQueueService, __testing } from './review-queue.service';
+import { Submission } from '../../contributor/entities/submission.entity';
+import { User } from '../../users/entities/user.entity';
+import { Concept } from '../concepts/concept.entity';
+import { AdminSubmissionsService } from '../submissions/admin-submissions.service';
 
 /**
  * Locks the wire-level mappings between backend enums (Submission.status)
@@ -10,6 +15,74 @@ import { __testing } from './review-queue.service';
 
 const { submissionStatusFor, deriveRisk, approvalRateFor, decisionForStatus } =
   __testing;
+
+describe('ReviewQueueService', () => {
+  it('queries submissions excluding draft status', async () => {
+    const submissionsFind = jest.fn().mockResolvedValue([]);
+    const submissionsRepo = {
+      find: submissionsFind,
+    } as unknown as Repository<Submission>;
+    const usersRepo = { find: jest.fn() } as unknown as Repository<User>;
+    const conceptsRepo = { find: jest.fn() } as unknown as Repository<Concept>;
+    const adminSubmissions = {} as AdminSubmissionsService;
+
+    const service = new ReviewQueueService(
+      submissionsRepo,
+      usersRepo,
+      conceptsRepo,
+      adminSubmissions,
+    );
+
+    const result = await service.queue();
+
+    expect(result).toEqual({ submissions: [] });
+    expect(submissionsFind).toHaveBeenCalledTimes(1);
+    const findArgs = submissionsFind.mock.calls[0] as [
+      { where?: { status?: unknown } } | undefined,
+    ];
+    expect(findArgs[0]?.where?.status).toEqual(Not('draft'));
+  });
+
+  it('forwards decision, comment and reward_amount to adminSubmissions.decide', async () => {
+    const decideMock = jest.fn().mockResolvedValue({});
+    const submissionsRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<Submission>;
+    const usersRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<User>;
+    const conceptsRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<Concept>;
+    const adminSubmissions = {
+      decide: decideMock,
+    } as unknown as AdminSubmissionsService;
+
+    const service = new ReviewQueueService(
+      submissionsRepo,
+      usersRepo,
+      conceptsRepo,
+      adminSubmissions,
+    );
+
+    await service.decide('admin-user-id', {
+      id: '1bd42d11-2ae1-44e0-a409-2313bd6a0497',
+      status: 'Approved',
+      comment: 'Looks great',
+      reward_amount: 500,
+    });
+
+    expect(decideMock).toHaveBeenCalledWith({
+      id: '1bd42d11-2ae1-44e0-a409-2313bd6a0497',
+      actorId: 'admin-user-id',
+      body: {
+        decision: 'approve',
+        notes: 'Looks great',
+        reward_amount: 500,
+      },
+    });
+  });
+});
 
 describe('submissionStatusFor', () => {
   it.each([

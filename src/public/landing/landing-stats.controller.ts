@@ -18,9 +18,7 @@ export interface LandingStatsData {
 @ApiTags('Public')
 @Controller('public/landing/stats')
 export class LandingStatsController {
-  constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
-  ) {}
+  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   @Public()
   @Get()

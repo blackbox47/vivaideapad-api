@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity';
 import { Concept } from '../concepts/concept.entity';
@@ -47,6 +47,7 @@ export type LegacyDecideBody = {
   id: string;
   status: SubmissionStatus;
   comment?: string;
+  reward_amount?: number;
 };
 
 @Injectable()
@@ -67,7 +68,7 @@ export class ReviewQueueService {
    */
   async queue(): Promise<ReviewQueueResponse> {
     const rows = await this.submissions.find({
-      where: { deletedAt: IsNull() },
+      where: { deletedAt: IsNull(), status: Not('draft') },
       order: { createdAt: 'DESC' },
       take: 200,
     });
@@ -133,7 +134,11 @@ export class ReviewQueueService {
     await this.adminSubmissions.decide({
       id: body.id,
       actorId,
-      body: { decision, notes: body.comment },
+      body: {
+        decision,
+        notes: body.comment,
+        reward_amount: body.reward_amount,
+      },
     });
     return this.queue();
   }

@@ -418,11 +418,19 @@ export class ContributorController {
       payout_reversal: 'Adjustment',
       manual_adjustment: 'Adjustment',
     };
-    const statusMap: Record<string, string> = {
-      posted: 'Available',
-      pending: 'Pending',
-      failed: 'Recorded',
-      cancelled: 'Recorded',
+
+    const resolveStatus = (type: string, status: string): string => {
+      if (type === 'payout_hold') {
+        if (status === 'pending') return 'Pending';
+        if (status === 'posted') return 'Paid';
+        if (status === 'reversed') return 'Rejected';
+      }
+      if (status === 'reversed') return 'Rejected';
+      if (status === 'pending') return 'Pending';
+      if (status === 'posted') {
+        return type === 'reward_credit' ? 'Available' : 'Recorded';
+      }
+      return 'Recorded';
     };
 
     const entries = ledgerEntries.map((l) => ({
@@ -440,7 +448,7 @@ export class ContributorController {
       ).slice(0, 10),
       type: typeMap[l.type] ?? 'Reward',
       amount: `Tk ${Math.abs(Number(l.amount)).toLocaleString()}`,
-      status: statusMap[l.status] ?? 'Available',
+      status: resolveStatus(l.type, l.status),
     }));
 
     return {

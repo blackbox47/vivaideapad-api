@@ -8,11 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-export const CONCEPT_STATUSES = [
-  'draft',
-  'active',
-  'archived',
-] as const;
+export const CONCEPT_STATUSES = ['draft', 'active', 'archived'] as const;
 export type ConceptStatus = (typeof CONCEPT_STATUSES)[number];
 
 @Entity('concepts')

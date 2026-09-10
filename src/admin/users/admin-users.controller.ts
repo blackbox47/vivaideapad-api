@@ -58,9 +58,7 @@ export class AdminUsersController {
     @CurrentUser() actor: { id: string },
   ) {
     const s = (body.status || body.access_status || '').toLowerCase() as
-      | 'active'
-      | 'suspended'
-      | 'invited';
+      'active' | 'suspended' | 'invited';
     return this.users.updateAccessStatus({
       id: body.id,
       actorId: actor.id,

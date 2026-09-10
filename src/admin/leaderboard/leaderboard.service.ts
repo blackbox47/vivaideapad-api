@@ -69,13 +69,21 @@ export class LeaderboardService {
   async list(input: {
     period: LeaderboardPeriod;
     limit: number;
+    search?: string;
   }): Promise<LeaderboardRow[]> {
     const limit = Math.max(1, Math.min(200, input.limit));
-    const rows = await this.repo
+    const qb = this.repo
       .createQueryBuilder('lr')
       .leftJoin('users', 'u', 'u.id = lr.user_id')
       .where('lr.period = :p', { p: input.period })
-      .andWhere('u.deleted_at IS NULL')
+      .andWhere('u.deleted_at IS NULL');
+
+    if (input.search?.trim()) {
+      const q = `%${input.search.trim()}%`;
+      qb.andWhere('(u.display_name LIKE :q OR u.email LIKE :q)', { q });
+    }
+
+    const rows = await qb
       .select([
         'lr.user_id AS user_id',
         'u.email AS email',

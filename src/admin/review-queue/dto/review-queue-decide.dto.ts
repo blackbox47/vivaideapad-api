@@ -21,6 +21,7 @@ export const ReviewQueueDecideSchema = z.object({
     'Rejected',
   ]),
   comment: z.string().max(2000).optional(),
+  reward_amount: z.coerce.number().positive().optional(),
 });
 export class ReviewQueueDecideDto extends createZodDto(
   ReviewQueueDecideSchema,

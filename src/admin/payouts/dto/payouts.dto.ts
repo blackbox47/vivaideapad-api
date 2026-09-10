@@ -29,9 +29,17 @@ export const CreatePayoutSchema = z.object({
 export class CreatePayoutDto extends createZodDto(CreatePayoutSchema) {}
 
 export const ProcessPayoutSchema = z.object({
-  action: z.enum(['mark_paid', 'reject']),
+  id: z.string().optional(),
+  action: z.enum(['mark_paid', 'reject']).optional(),
+  status: z.string().optional(),
   reference: z.string().max(255).optional(),
+  processing_reference: z.string().max(255).optional(),
+  transaction_reference: z.string().max(255).optional(),
   note: z.string().max(2000).optional(),
+  notes: z.string().max(2000).optional(),
+  admin_notes: z.string().max(2000).optional(),
+  decision_notes: z.string().max(2000).optional(),
+  rejection_reason: z.string().max(2000).optional(),
 });
 export class ProcessPayoutDto extends createZodDto(ProcessPayoutSchema) {}
 

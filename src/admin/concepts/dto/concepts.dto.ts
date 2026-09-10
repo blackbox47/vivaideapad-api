@@ -64,10 +64,13 @@ export type BulkConceptActionType = (typeof BULK_CONCEPT_ACTIONS)[number];
 
 export const BulkConceptActionSchema = z.object({
   action: z.enum(BULK_CONCEPT_ACTIONS),
-  ids: z.array(z.uuid({ message: 'Each id must be a UUID' })).min(1, 'At least one id is required'),
+  ids: z
+    .array(z.uuid({ message: 'Each id must be a UUID' }))
+    .min(1, 'At least one id is required'),
   status: z.enum(CONCEPT_STATUSES).optional(),
   for_new_users: z.boolean().optional(),
   is_onboarding: z.boolean().optional(),
 });
-export class BulkConceptActionDto extends createZodDto(BulkConceptActionSchema) {}
-
+export class BulkConceptActionDto extends createZodDto(
+  BulkConceptActionSchema,
+) {}

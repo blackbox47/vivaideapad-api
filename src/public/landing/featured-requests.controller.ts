@@ -30,9 +30,7 @@ export interface FeaturedRequestItem {
 @ApiTags('Public')
 @Controller('public/landing/featured-requests')
 export class FeaturedRequestsController {
-  constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
-  ) {}
+  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   @Public()
   @Get()
@@ -133,9 +131,7 @@ export class FeaturedRequestsController {
         // Days left clamped to 0
         let daysLeft = 0;
         if (c.close_date) {
-          const closeTime = new Date(
-            c.close_date as string | Date,
-          ).getTime();
+          const closeTime = new Date(c.close_date as string | Date).getTime();
           const diffMs = closeTime - now;
           daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
         }
