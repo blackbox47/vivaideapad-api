@@ -82,6 +82,11 @@ class ContributorConceptsListQueryDto extends createZodDto(
 const NotificationIdParamSchema = z.object({ id: z.uuid() });
 class NotificationIdParamDto extends createZodDto(NotificationIdParamSchema) {}
 
+const NotificationMarkReadBodySchema = z.object({ id: z.uuid() });
+class NotificationMarkReadBodyDto extends createZodDto(
+  NotificationMarkReadBodySchema,
+) {}
+
 const NotificationsListQuerySchema = z.object({
   read_state: z.enum(['unread', 'read']).optional(),
   page: z.coerce.number().int().min(1).optional(),
@@ -563,6 +568,25 @@ export class ContributorController {
     const user = req.user as { sub: string };
     const updated = await this.notify.markRead({
       id: params.id,
+      recipientId: user.sub,
+    });
+    return {
+      id: updated.id,
+      read_state: updated.readState,
+      read_at: updated.readAt,
+    };
+  }
+
+  @Patch('notifications')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark a notification as read (by body)' })
+  async markNotificationReadBody(
+    @Body() body: NotificationMarkReadBodyDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as { sub: string };
+    const updated = await this.notify.markRead({
+      id: body.id,
       recipientId: user.sub,
     });
     return {

@@ -3,8 +3,11 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   MessageEvent,
   Param,
+  Patch,
   Post,
   Query,
   Sse,
@@ -25,6 +28,7 @@ import {
 import { JwtAccessGuard } from '../../auth/guards/jwt-access.guard';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AdminNotificationsService } from './admin-notifications.service';
+import { NotificationsService } from './notifications.service';
 import { NotificationsStreamService } from './notifications-stream.service';
 import { USER_ROLES, isUserRole } from '../../users/entities/user.entity';
 
@@ -39,6 +43,9 @@ class ListQueryDto extends createZodDto(ListQuerySchema) {}
 
 const IdParamSchema = z.object({ id: z.string().uuid() });
 class IdParamDto extends createZodDto(IdParamSchema) {}
+
+const MarkReadBodySchema = z.object({ id: z.string().uuid() });
+class MarkReadBodyDto extends createZodDto(MarkReadBodySchema) {}
 
 const BroadcastSchema = z.object({
   recipient_ids: z.array(z.string().uuid()).optional(),
@@ -71,6 +78,7 @@ export class AdminNotificationsController {
   constructor(
     private readonly notifications: AdminNotificationsService,
     private readonly stream: NotificationsStreamService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Get('stream')
@@ -135,6 +143,49 @@ export class AdminNotificationsController {
       actorId: actor.id,
       body,
     });
+  }
+
+  @Patch(':id/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark an admin notification as read' })
+  async markNotificationRead(
+    @Param() params: IdParamDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    const updated = await this.notificationsService.markRead({
+      id: params.id,
+      recipientId: actor.id,
+    });
+    return {
+      id: updated.id,
+      read_state: updated.readState,
+      read_at: updated.readAt,
+    };
+  }
+
+  @Patch()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark an admin notification as read (by body)' })
+  async markNotificationReadBody(
+    @Body() body: MarkReadBodyDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    const updated = await this.notificationsService.markRead({
+      id: body.id,
+      recipientId: actor.id,
+    });
+    return {
+      id: updated.id,
+      read_state: updated.readState,
+      read_at: updated.readAt,
+    };
+  }
+
+  @Post('read-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark all admin notifications as read' })
+  async markAllRead(@CurrentUser() actor: { id: string }) {
+    return this.notificationsService.markAllRead(actor.id);
   }
 
   @Delete(':id')
