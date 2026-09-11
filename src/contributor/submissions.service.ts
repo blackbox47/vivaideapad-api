@@ -161,6 +161,7 @@ export class SubmissionsService {
         `Submission cannot be edited in status ${found.status}`,
       );
     }
+    if (patch.concept_id !== undefined) found.conceptId = patch.concept_id;
     if (patch.title !== undefined) found.title = patch.title;
     if (patch.body !== undefined) found.body = patch.body;
     if (patch.attachments !== undefined) found.attachments = patch.attachments;

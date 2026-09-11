@@ -51,6 +51,7 @@ export const CreateSubmissionSchema = z.object({
 export class CreateSubmissionDto extends createZodDto(CreateSubmissionSchema) {}
 
 export const UpdateSubmissionSchema = z.object({
+  concept_id: z.uuid().optional(),
   title: z.string().min(1).max(255).optional(),
   body: z.string().min(1).max(20_000).optional(),
   attachments: z
