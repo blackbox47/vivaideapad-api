@@ -12,6 +12,7 @@ export const AdminLedgerListQuerySchema = z.object({
   status: z.enum(LEDGER_ENTRY_STATUSES).optional(),
   date_from: z.iso.datetime().optional(),
   date_to: z.iso.datetime().optional(),
+  search: z.string().optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).optional(),
 });

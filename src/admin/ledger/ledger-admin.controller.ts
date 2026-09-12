@@ -44,21 +44,12 @@ export class AdminLedgerController {
       status: query.status,
       date_from: query.date_from,
       date_to: query.date_to,
+      search: query.search,
       page,
       limit,
     });
     return {
-      data: data.map((row) => ({
-        id: row.id,
-        user_id: row.userId,
-        type: row.type,
-        amount: row.amount,
-        status: row.status,
-        reference: row.reference,
-        metadata: row.metadata,
-        posted_at: row.postedAt,
-        created_at: row.createdAt,
-      })),
+      data,
       meta: buildPaginationMeta(page, limit, total),
     };
   }
@@ -66,18 +57,7 @@ export class AdminLedgerController {
   @Get(':id')
   @ApiOperation({ summary: 'Ledger entry detail' })
   async get(@Param() params: LedgerIdParamDto) {
-    const row = await this.ledger.findOne(params.id);
-    return {
-      id: row.id,
-      user_id: row.userId,
-      type: row.type,
-      amount: row.amount,
-      status: row.status,
-      reference: row.reference,
-      metadata: row.metadata,
-      posted_at: row.postedAt,
-      created_at: row.createdAt,
-    };
+    return this.ledger.findOne(params.id);
   }
 
   @Post('manual-adjustment')
@@ -90,20 +70,9 @@ export class AdminLedgerController {
     @Req() req: Request,
   ) {
     const actor = req.user as { sub: string };
-    const row = await this.ledger.manualAdjustment({
+    return this.ledger.manualAdjustment({
       actorId: actor.sub,
       body,
     });
-    return {
-      id: row.id,
-      user_id: row.userId,
-      type: row.type,
-      amount: row.amount,
-      status: row.status,
-      reference: row.reference,
-      metadata: row.metadata,
-      posted_at: row.postedAt,
-      created_at: row.createdAt,
-    };
   }
 }
