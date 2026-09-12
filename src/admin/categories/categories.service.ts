@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
-import { Category } from './category.entity';
+import { Category, type CategoryStatus } from './category.entity';
 import type {
   CreateCategoryDto,
   UpdateCategoryDto,
@@ -13,20 +13,49 @@ export interface SerializedCategory {
   id: string;
   slug: string;
   name: string;
+  icon: string | null;
   description: string | null;
   is_active: Category['isActive'];
+  isActive: boolean;
   sort_order: number;
   color: string;
   created_at: Date;
   updated_at: Date;
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function resolveStatus(
+  isActive?: boolean,
+  is_active?: boolean | CategoryStatus,
+): CategoryStatus {
+  if (isActive !== undefined) {
+    return isActive ? 'active' : 'archived';
+  }
+  if (is_active !== undefined) {
+    if (typeof is_active === 'boolean') {
+      return is_active ? 'active' : 'archived';
+    }
+    return is_active;
+  }
+  return 'active';
+}
+
 const toSerialized = (c: Category): SerializedCategory => ({
   id: c.id,
   slug: c.slug,
   name: c.name,
+  icon: c.icon ?? null,
   description: c.description,
   is_active: c.isActive,
+  isActive: c.isActive === 'active',
   sort_order: c.sortOrder,
   color: c.color,
   created_at: c.createdAt,
@@ -82,18 +111,38 @@ export class CategoriesService {
   }
 
   async create(input: CreateCategoryDto): Promise<SerializedCategory> {
-    const existing = await this.repo.findOne({
-      where: { slug: input.slug },
-      withDeleted: true,
-    });
-    if (existing && !existing.deletedAt) {
-      throw ApiException.conflict('slug_taken', 'Category slug already exists');
+    let slug = input.slug?.trim() || slugify(input.name) || 'category';
+    if (!input.slug) {
+      let candidate = slug;
+      let counter = 1;
+      while (
+        await this.repo.findOne({
+          where: { slug: candidate },
+          withDeleted: true,
+        })
+      ) {
+        candidate = `${slug}-${counter}`;
+        counter++;
+      }
+      slug = candidate;
+    } else {
+      const existing = await this.repo.findOne({
+        where: { slug },
+        withDeleted: true,
+      });
+      if (existing && !existing.deletedAt) {
+        throw ApiException.conflict('slug_taken', 'Category slug already exists');
+      }
     }
+
+    const status = resolveStatus(input.isActive, input.is_active);
+
     const row = this.repo.create({
-      slug: input.slug,
+      slug,
       name: input.name,
+      icon: input.icon ?? null,
       description: input.description ?? null,
-      isActive: input.is_active ?? 'active',
+      isActive: status,
       sortOrder: input.sort_order ?? 0,
       color: input.color ?? '#6B7280',
     });
@@ -109,21 +158,32 @@ export class CategoriesService {
       where: { id, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Category');
-    if (patch.slug && patch.slug !== found.slug) {
+
+    let slug = patch.slug?.trim();
+    if (slug && slug !== found.slug) {
       const dup = await this.repo.findOne({
-        where: { slug: patch.slug },
+        where: { slug },
         withDeleted: true,
       });
       if (dup && dup.id !== found.id && !dup.deletedAt) {
         throw ApiException.conflict('slug_taken', 'Slug already in use');
       }
+    } else {
+      slug = found.slug;
     }
+
+    let status = found.isActive;
+    if (patch.isActive !== undefined || patch.is_active !== undefined) {
+      status = resolveStatus(patch.isActive, patch.is_active);
+    }
+
     Object.assign(found, {
-      slug: patch.slug ?? found.slug,
+      slug,
       name: patch.name ?? found.name,
+      icon: patch.icon !== undefined ? patch.icon : found.icon,
       description:
         patch.description !== undefined ? patch.description : found.description,
-      isActive: patch.is_active ?? found.isActive,
+      isActive: status,
       sortOrder: patch.sort_order ?? found.sortOrder,
       color: patch.color ?? found.color,
     });

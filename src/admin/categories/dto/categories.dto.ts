@@ -7,8 +7,10 @@ export const CategorySchema = z.object({
   id: z.uuid(),
   slug: z.string(),
   name: z.string(),
+  icon: z.string().nullable().optional(),
   description: z.string().nullable(),
   is_active: z.enum(CATEGORY_STATUSES),
+  isActive: z.boolean().optional(),
   sort_order: z.number().int(),
   color: z.string(),
   created_at: z.iso.datetime(),
@@ -22,14 +24,21 @@ export const CreateCategorySchema = z.object({
     .string()
     .min(1)
     .max(120)
-    .regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, digits, dashes'),
+    .regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, digits, dashes')
+    .optional(),
   name: z.string().min(1).max(255),
+  icon: z.string().max(255).optional(),
   description: z.string().max(2000).optional(),
-  is_active: z.enum(CATEGORY_STATUSES).default('active'),
-  sort_order: z.number().int().min(0).default(0),
+  is_active: z
+    .union([z.boolean(), z.enum(CATEGORY_STATUSES)])
+    .optional()
+    .default('active'),
+  isActive: z.boolean().optional(),
+  sort_order: z.number().int().min(0).optional().default(0),
   color: z
     .string()
     .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'must be a hex color')
+    .optional()
     .default('#6B7280'),
 });
 

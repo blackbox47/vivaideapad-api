@@ -111,13 +111,12 @@ export class UploadsController {
 
   @Public()
   @Get(['files/*', 'files/:year/:month/:filename'])
-  @ApiOperation({ summary: 'Serve a stored attachment file' })
   async serve(
+    @Req() req: Request,
+    @Res() res: Response,
     @Param() params: Record<string, string>,
     @Query('download') downloadFlag?: string,
     @Query('filename') filename?: string,
-    @Req() req: Request,
-    @Res() res: Response,
   ) {
     const uploadDir = this.config.get<string>('uploads.dir')!;
     let rawPath =
