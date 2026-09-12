@@ -38,7 +38,7 @@ export class Submission {
   body!: string;
 
   @Column({ type: 'json', nullable: true })
-  attachments!: Record<string, unknown> | null;
+  attachments!: Record<string, unknown>[] | Record<string, unknown> | null;
 
   @Column({
     type: 'enum',

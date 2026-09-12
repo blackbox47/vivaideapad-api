@@ -7,6 +7,7 @@ import { Submission, SubmissionStatus } from './entities/submission.entity';
 import { Concept } from '../admin/concepts/concept.entity';
 import {
   CreateSubmissionDto,
+  normalizeAttachments,
   UpdateSubmissionDto,
 } from './dto/submissions.dto';
 
@@ -21,7 +22,7 @@ export interface SerializedSubmission {
   } | null;
   title: string;
   body: string;
-  attachments: Record<string, unknown> | null;
+  attachments: Record<string, unknown>[] | Record<string, unknown> | null;
   status: SubmissionStatus;
   risk_signal: Record<string, unknown> | null;
   reward_amount: string | null;
@@ -131,12 +132,13 @@ export class SubmissionsService {
     userId: string,
     input: CreateSubmissionDto,
   ): Promise<SerializedSubmission> {
+    const attachments = normalizeAttachments(input.attachments);
     const row = this.repo.create({
       userId,
       conceptId: input.concept_id,
       title: input.title,
       body: input.body,
-      attachments: input.attachments ?? null,
+      attachments: attachments.length > 0 ? attachments : null,
       status: 'draft',
     });
     const saved = await this.repo.save(row);
@@ -164,7 +166,10 @@ export class SubmissionsService {
     if (patch.concept_id !== undefined) found.conceptId = patch.concept_id;
     if (patch.title !== undefined) found.title = patch.title;
     if (patch.body !== undefined) found.body = patch.body;
-    if (patch.attachments !== undefined) found.attachments = patch.attachments;
+    if (patch.attachments !== undefined) {
+      const attachments = normalizeAttachments(patch.attachments);
+      found.attachments = attachments.length > 0 ? attachments : null;
+    }
     const saved = await this.repo.save(found);
     const concept = saved.conceptId
       ? await this.conceptRepo.findOne({ where: { id: saved.conceptId } })

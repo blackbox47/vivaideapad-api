@@ -25,7 +25,7 @@ export interface SerializedAdminSubmission {
   concept_id: string;
   title: string;
   body: string;
-  attachments: Record<string, unknown> | null;
+  attachments: Record<string, unknown>[] | Record<string, unknown> | null;
   status: SubmissionStatus;
   risk_signal: Record<string, unknown> | null;
   reward_amount: string | null;
