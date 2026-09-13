@@ -145,6 +145,11 @@ export class PayoutsService {
       // Balance check — sum of posted entries.
       const summary = await this.wallet.summary(input.userId);
       const balance = Number(summary.balance);
+      if (!Number.isFinite(balance) || balance <= 0) {
+        throw ApiException.validation(
+          'Withdrawal is unavailable when available balance is zero or less',
+        );
+      }
       if (balance < amount) {
         throw ApiException.insufficientBalance();
       }

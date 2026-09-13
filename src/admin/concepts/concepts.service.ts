@@ -51,6 +51,7 @@ export class ConceptsService {
     search?: string;
     status?: ConceptStatus;
     category_id?: string;
+    is_onboarding?: boolean;
     page: number;
     limit: number;
   }): Promise<{ data: SerializedConcept[]; total: number }> {
@@ -63,6 +64,11 @@ export class ConceptsService {
     }
     if (input.category_id) {
       qb.andWhere('c.category_id = :cid', { cid: input.category_id });
+    }
+    if (input.is_onboarding !== undefined) {
+      qb.andWhere('c.is_onboarding = :onboarding', {
+        onboarding: input.is_onboarding,
+      });
     }
     qb.orderBy('c.created_at', 'DESC')
       .skip((input.page - 1) * input.limit)

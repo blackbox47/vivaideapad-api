@@ -50,6 +50,7 @@ export class AdminConceptsController {
       search: query.search,
       status: query.status,
       category_id: query.category_id,
+      is_onboarding: query.is_onboarding,
       page,
       limit,
     });

@@ -41,6 +41,14 @@ export const ConceptListQuerySchema = z.object({
   search: z.string().optional(),
   status: z.enum(CONCEPT_STATUSES).optional(),
   category_id: z.uuid().optional(),
+  is_onboarding: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform((value) => {
+      if (value === undefined) return undefined;
+      if (typeof value === 'boolean') return value;
+      return value === 'true' || value === '1';
+    }),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).optional(),
 });
