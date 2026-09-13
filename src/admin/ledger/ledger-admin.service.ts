@@ -4,7 +4,7 @@ import { DataSource, In, Like, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
-import { LedgerEntry } from '../../contributor/entities/ledger-entry.entity';
+import { LedgerEntry, type LedgerListFilterType } from '../../contributor/entities/ledger-entry.entity';
 import { User } from '../../users/entities/user.entity';
 import { ManualAdjustmentDto } from './dto/ledger-admin.dto';
 
@@ -69,7 +69,7 @@ export class LedgerAdminService {
 
   async list(input: {
     user_id?: string;
-    type?: LedgerEntry['type'];
+    type?: LedgerListFilterType;
     status?: LedgerEntry['status'];
     date_from?: string;
     date_to?: string;

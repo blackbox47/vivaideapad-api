@@ -165,10 +165,16 @@ export class AuditEventsService {
         `(a.action LIKE :s
           OR a.target_type LIKE :s
           OR a.target_id LIKE :s
-          OR a.category LIKE :s
           OR a.actor_id IN (
             SELECT u.id FROM users u
             WHERE u.display_name LIKE :s OR u.email LIKE :s
+          )
+          OR (
+            a.target_type = 'user'
+            AND a.target_id IN (
+              SELECT tu.id FROM users tu
+              WHERE tu.display_name LIKE :s OR tu.email LIKE :s
+            )
           ))`,
         { s: `%${search}%` },
       );

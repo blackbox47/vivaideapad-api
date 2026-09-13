@@ -15,6 +15,15 @@ export const LEDGER_ENTRY_TYPES = [
 ] as const;
 export type LedgerEntryType = (typeof LEDGER_ENTRY_TYPES)[number];
 
+/** Types allowed on ledger list `type` filters (excludes manual adjustments). */
+export const LEDGER_LIST_FILTER_TYPES = [
+  'reward_credit',
+  'payout_hold',
+  'payout_reversal',
+  'fee',
+] as const;
+export type LedgerListFilterType = (typeof LEDGER_LIST_FILTER_TYPES)[number];
+
 export const LEDGER_ENTRY_STATUSES = ['pending', 'posted', 'reversed'] as const;
 export type LedgerEntryStatus = (typeof LEDGER_ENTRY_STATUSES)[number];
 

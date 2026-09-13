@@ -4,6 +4,7 @@ import { createZodDto } from 'nestjs-zod';
 import {
   LEDGER_ENTRY_STATUSES,
   LEDGER_ENTRY_TYPES,
+  LEDGER_LIST_FILTER_TYPES,
 } from '../entities/ledger-entry.entity';
 
 export const LedgerEntrySchema = z.object({
@@ -21,7 +22,7 @@ export const LedgerEntrySchema = z.object({
 export class LedgerEntryDto extends createZodDto(LedgerEntrySchema) {}
 
 export const LedgerListQuerySchema = z.object({
-  type: z.enum(LEDGER_ENTRY_TYPES).optional(),
+  type: z.enum(LEDGER_LIST_FILTER_TYPES).optional(),
   status: z.enum(LEDGER_ENTRY_STATUSES).optional(),
   date_from: z.iso.datetime().optional(),
   date_to: z.iso.datetime().optional(),

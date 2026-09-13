@@ -470,8 +470,9 @@ export class ContributorController {
     const typeMap: Record<string, string> = {
       reward_credit: 'Reward',
       payout_hold: 'Withdrawal',
-      payout_reversal: 'Adjustment',
-      manual_adjustment: 'Adjustment',
+      payout_reversal: 'Reward',
+      manual_adjustment: 'Reward',
+      fee: 'Withdrawal',
     };
 
     const resolveStatus = (type: string, status: string): string => {
@@ -483,28 +484,43 @@ export class ContributorController {
       if (status === 'reversed') return 'Rejected';
       if (status === 'pending') return 'Pending';
       if (status === 'posted') {
-        return type === 'reward_credit' ? 'Available' : 'Recorded';
+        return type === 'reward_credit' || type === 'manual_adjustment'
+          ? 'Available'
+          : 'Recorded';
       }
       return 'Recorded';
     };
 
-    const entries = ledgerEntries.map((l) => ({
-      id: l.id,
-      description:
-        (l.metadata?.description as string) ??
-        (l.type === 'reward_credit'
+    const entries = ledgerEntries.map((l) => {
+      const signedAmount = Number(l.amount);
+      const displayType =
+        l.type === 'manual_adjustment' && signedAmount < 0
+          ? 'Withdrawal'
+          : (typeMap[l.type] ?? 'Reward');
+      const descriptionFallback =
+        l.type === 'reward_credit'
           ? 'Reward earned'
           : l.type === 'payout_hold'
             ? 'Withdrawal request'
-            : 'Adjustment'),
-      date: (l.postedAt
-        ? l.postedAt.toISOString()
-        : l.createdAt.toISOString()
-      ).slice(0, 10),
-      type: typeMap[l.type] ?? 'Reward',
-      amount: `Tk ${Math.abs(Number(l.amount)).toLocaleString()}`,
-      status: resolveStatus(l.type, l.status),
-    }));
+            : l.type === 'payout_reversal'
+              ? 'Payout reversal'
+              : l.type === 'fee'
+                ? 'Fee'
+                : 'Ledger entry';
+
+      return {
+        id: l.id,
+        description:
+          (l.metadata?.description as string) ?? descriptionFallback,
+        date: (l.postedAt
+          ? l.postedAt.toISOString()
+          : l.createdAt.toISOString()
+        ).slice(0, 10),
+        type: displayType,
+        amount: `Tk ${Math.abs(signedAmount).toLocaleString()}`,
+        status: resolveStatus(l.type, l.status),
+      };
+    });
 
     return {
       available: `Tk ${Number(summary.balance).toLocaleString()}`,
