@@ -9,7 +9,7 @@ import { Notification } from '../notifications/notification.entity';
 import { WalletService } from '../../contributor/wallet.service';
 import { PayoutRequest, PayoutStatus } from './payout.entity';
 import { LedgerEntry } from '../../contributor/entities/ledger-entry.entity';
-import { CreatePayoutDto, ProcessPayoutDto } from './dto/payouts.dto';
+import { CreatePayoutDto, MIN_PAYOUT_AMOUNT, ProcessPayoutDto } from './dto/payouts.dto';
 import { User } from '../../users/entities/user.entity';
 
 export interface SerializedPayout {
@@ -137,6 +137,9 @@ export class PayoutsService {
     const amount = Number(input.body.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw ApiException.validation('Amount must be a positive number');
+    }
+    if (amount < MIN_PAYOUT_AMOUNT) {
+      throw ApiException.validation('Minimum withdrawal is 500');
     }
     return this.dataSource.transaction(async (manager) => {
       // Balance check — sum of posted entries.

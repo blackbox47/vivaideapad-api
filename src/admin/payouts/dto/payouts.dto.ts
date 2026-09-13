@@ -19,8 +19,13 @@ export const PayoutSchema = z.object({
 });
 export class PayoutDto extends createZodDto(PayoutSchema) {}
 
+export const MIN_PAYOUT_AMOUNT = 500;
+
 export const CreatePayoutSchema = z.object({
-  amount: z.coerce.number().positive(),
+  amount: z.coerce
+    .number()
+    .positive()
+    .min(MIN_PAYOUT_AMOUNT, { message: 'Minimum withdrawal is 500' }),
   method: z.string().min(1).max(40).optional(),
   mobile: z.string().min(1).max(50).optional(),
   phone: z.string().min(1).max(50).optional(),
