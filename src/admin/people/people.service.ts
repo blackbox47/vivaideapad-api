@@ -8,6 +8,7 @@ import {
   ApplicationStatus,
 } from '../applications/application.entity';
 import { Category } from '../categories/category.entity';
+import { deriveApplicationRisk } from '../applications/applications.service';
 
 /**
  * Shape returned by GET /admin/people. Matches the frontend's
@@ -35,6 +36,10 @@ export interface ApplicantView {
   body: string;
   submitted: string;
   status: ApplicantStatus;
+  source: string;
+  consent: boolean;
+  decisionNotes: string | null;
+  risk: 'Low' | 'Medium' | 'High';
 }
 
 export type ApplicantStatus =
@@ -111,6 +116,10 @@ export class PeopleService {
         body: a.ideaDescription,
         submitted: a.createdAt.toISOString(),
         status: applicantStatusFor(a.status),
+        source: 'Website signup',
+        consent: !!a.consent,
+        decisionNotes: a.decisionNotes,
+        risk: deriveApplicationRisk(`${a.ideaTitle} ${a.ideaDescription}`),
       };
     });
   }

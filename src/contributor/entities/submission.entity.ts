@@ -38,7 +38,7 @@ export class Submission {
   body!: string;
 
   @Column({ type: 'json', nullable: true })
-  attachments!: Record<string, unknown> | null;
+  attachments!: Record<string, unknown>[] | Record<string, unknown> | null;
 
   @Column({
     type: 'enum',
@@ -61,6 +61,12 @@ export class Submission {
 
   @Column({ type: 'text', nullable: true, name: 'decision_notes' })
   decisionNotes!: string | null;
+
+  @Column({ type: 'int', nullable: true, name: 'revision_window_days' })
+  revisionWindowDays!: number | null;
+
+  @Column({ type: 'datetime', nullable: true, name: 'revision_due_at' })
+  revisionDueAt!: Date | null;
 
   @Column({ type: 'datetime', nullable: true, name: 'decided_at' })
   decidedAt!: Date | null;

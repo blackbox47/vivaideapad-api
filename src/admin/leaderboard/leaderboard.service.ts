@@ -7,14 +7,30 @@ import {
   LeaderboardRecord,
 } from './leaderboard-record.entity';
 
+export function deriveInitialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  if (parts.length === 1 && parts[0].length > 0) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return '?';
+}
+
 export interface LeaderboardRow {
   rank: number;
   user_id: string;
   email: string | null;
   display_name: string | null;
+  initials?: string;
+  name?: string;
   score: string;
+  amount?: number;
   approvals: number;
+  wins?: number;
   submissions_count: number;
+  ideas?: number;
   streak: number;
   last_updated: Date | null;
 }
@@ -76,7 +92,10 @@ export class LeaderboardService {
       .createQueryBuilder('lr')
       .leftJoin('users', 'u', 'u.id = lr.user_id')
       .where('lr.period = :p', { p: input.period })
-      .andWhere('u.deleted_at IS NULL');
+      .andWhere('u.deleted_at IS NULL')
+      .andWhere('u.access_status IN (:...allowedStatuses)', {
+        allowedStatuses: ['active', 'invited'],
+      });
 
     if (input.search?.trim()) {
       const q = `%${input.search.trim()}%`;
@@ -112,14 +131,27 @@ export class LeaderboardService {
           : v == null
             ? null
             : new Date((v as { toString(): string }).toString());
+      const displayName = safeString(r.display_name)?.trim() || null;
+      const email = safeString(r.email)?.trim() || null;
+      const name = displayName || (email ? email.split('@')[0] : 'Anonymous');
+      const scoreStr = safeString(r.score) ?? '0';
+      const scoreNum = Number(scoreStr);
+      const approvals = Number(r.approvals ?? 0);
+      const submissionsCount = Number(r.submissions_count ?? 0);
+
       return {
         rank: idx + 1,
         user_id: safeString(r.user_id) ?? '',
-        email: safeString(r.email),
-        display_name: safeString(r.display_name),
-        score: safeString(r.score) ?? '0',
-        approvals: Number(r.approvals ?? 0),
-        submissions_count: Number(r.submissions_count ?? 0),
+        email,
+        display_name: displayName,
+        initials: deriveInitialsFromName(name),
+        name,
+        score: scoreStr,
+        amount: scoreNum,
+        approvals,
+        wins: approvals,
+        submissions_count: submissionsCount,
+        ideas: submissionsCount,
         streak: Number(r.streak ?? 0),
         last_updated: safeDate(r.last_updated),
       };
@@ -203,23 +235,35 @@ export class LeaderboardService {
     });
   }
 
-  async findPublicTop(limit: number): Promise<
+  async findPublicTop(
+    limit: number,
+    period: LeaderboardPeriod = 'all_time',
+  ): Promise<
     Array<{
       rank: number;
+      user_id: string;
+      email: string | null;
+      display_name: string | null;
       initials: string;
       name: string;
       wins: number;
       ideas: number;
       amount: number;
+      score: string;
+      approvals: number;
+      submissions_count: number;
+      streak: number;
     }>
   > {
     const clampedLimit = Math.max(1, Math.min(20, limit));
     const rows = await this.repo
       .createQueryBuilder('lr')
       .leftJoin('users', 'u', 'u.id = lr.user_id')
-      .where('lr.period = :p', { p: 'all_time' })
+      .where('lr.period = :p', { p: period })
       .andWhere('u.deleted_at IS NULL')
-      .andWhere('u.access_status = :status', { status: 'active' })
+      .andWhere('u.access_status IN (:...allowedStatuses)', {
+        allowedStatuses: ['active', 'invited'],
+      })
       .select([
         'lr.user_id AS user_id',
         'u.email AS email',
@@ -228,20 +272,27 @@ export class LeaderboardService {
         'lr.score AS score',
         'lr.approvals AS approvals',
         'lr.submissions_count AS submissions_count',
+        'lr.streak AS streak',
       ])
       .orderBy('lr.score', 'DESC')
       .addOrderBy('lr.approvals', 'DESC')
-      .addOrderBy('u.display_name', 'ASC')
       .limit(clampedLimit * 2)
       .getRawMany();
 
     const result: Array<{
       rank: number;
+      user_id: string;
+      email: string | null;
+      display_name: string | null;
       initials: string;
       name: string;
       wins: number;
       ideas: number;
       amount: number;
+      score: string;
+      approvals: number;
+      submissions_count: number;
+      streak: number;
     }> = [];
 
     for (const r of rows) {
@@ -266,27 +317,29 @@ export class LeaderboardService {
       }
 
       const displayName =
-        typeof r.display_name === 'string' ? r.display_name.trim() : '';
-      const email = typeof r.email === 'string' ? r.email.trim() : '';
+        typeof r.display_name === 'string' ? r.display_name.trim() : null;
+      const email = typeof r.email === 'string' ? r.email.trim() : null;
       const name = displayName || (email ? email.split('@')[0] : 'Anonymous');
-
-      const parts = name.split(/\s+/).filter(Boolean);
-      let initials = '';
-      if (parts.length >= 2) {
-        initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-      } else if (parts.length === 1 && parts[0].length > 0) {
-        initials = parts[0].slice(0, 2).toUpperCase();
-      } else {
-        initials = '?';
-      }
+      const approvals = Number(r.approvals ?? 0);
+      const submissionsCount = Number(r.submissions_count ?? 0);
+      const scoreStr =
+        typeof r.score === 'string' ? r.score : String(r.score ?? '0');
+      const scoreNum = Number(scoreStr);
 
       result.push({
         rank: result.length + 1,
-        initials,
+        user_id: String(r.user_id ?? ''),
+        email,
+        display_name: displayName,
+        initials: deriveInitialsFromName(name),
         name,
-        wins: Number(r.approvals ?? 0),
-        ideas: Number(r.submissions_count ?? 0),
-        amount: Number(r.score ?? 0),
+        wins: approvals,
+        ideas: submissionsCount,
+        amount: scoreNum,
+        score: scoreStr,
+        approvals,
+        submissions_count: submissionsCount,
+        streak: Number(r.streak ?? 0),
       });
     }
 

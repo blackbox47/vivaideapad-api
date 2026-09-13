@@ -56,6 +56,7 @@ export class ReviewQueueController {
       status: body.status,
       comment: body.comment,
       reward_amount: body.reward_amount,
+      revision_window_days: body.revision_window_days,
     });
   }
 }

@@ -8,6 +8,7 @@ import {
   NotificationReadState,
   NotificationType,
 } from './notification.entity';
+import { ApiException } from '../../common/exceptions/api-exception';
 import {
   NotificationsStreamService,
   WireNotification,
@@ -112,7 +113,7 @@ export class NotificationsService {
       },
     });
     if (!found) {
-      throw new Error('notification not found');
+      throw ApiException.notFound('Notification');
     }
     if (found.readState === 'read') return found;
     found.readState = 'read';

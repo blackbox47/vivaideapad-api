@@ -13,10 +13,11 @@ import {
   Req,
   Sse,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Observable, interval, merge } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -37,6 +38,7 @@ import { NotificationsStreamService } from '../admin/notifications/notifications
 import { UploadsService } from '../uploads/uploads.service';
 import {
   CreateSubmissionDto,
+  normalizeAttachments,
   SubmissionIdParamDto,
   SubmissionListQueryDto,
   UpdateSubmissionDto,
@@ -81,6 +83,11 @@ class ContributorConceptsListQueryDto extends createZodDto(
 
 const NotificationIdParamSchema = z.object({ id: z.uuid() });
 class NotificationIdParamDto extends createZodDto(NotificationIdParamSchema) {}
+
+const NotificationMarkReadBodySchema = z.object({ id: z.uuid() });
+class NotificationMarkReadBodyDto extends createZodDto(
+  NotificationMarkReadBodySchema,
+) {}
 
 const NotificationsListQuerySchema = z.object({
   read_state: z.enum(['unread', 'read']).optional(),
@@ -289,33 +296,55 @@ export class ContributorController {
   // Submissions
   // -----------------------------------------------------------------
   @Post('submissions')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    AnyFilesInterceptor({
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+        files: 5,
+      },
+    }),
+  )
   @ApiOperation({ summary: 'Create a new submission (draft)' })
   @ApiConsumes('multipart/form-data', 'application/json')
   async createSubmission(
     @Body() input: CreateSubmissionDto,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFiles() files: Express.Multer.File[] | undefined,
     @Req() req: Request,
   ) {
     const user = req.user as { sub: string };
-    let attachments = input.attachments ?? null;
-    if (file) {
+    const existingAttachments = normalizeAttachments(input.attachments);
+
+    const uploadedFiles = files ?? [];
+    if (existingAttachments.length + uploadedFiles.length > 5) {
+      throw ApiException.validation('Maximum 5 documents allowed');
+    }
+
+    const newAttachments: Record<string, unknown>[] = [];
+    for (const file of uploadedFiles) {
+      if (file.size > 10 * 1024 * 1024) {
+        throw ApiException.validation(
+          `File "${file.originalname}" exceeds the maximum allowed size of 10 MB`,
+        );
+      }
       const stored = await this.uploads.storeAttachment({
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
         path: file.path,
       });
-      attachments = {
-        url: stored.url,
-        mime_type: stored.mime_type,
-        size: stored.size,
+      newAttachments.push({
+        name: stored.original_name,
         original_name: stored.original_name,
-      };
+        url: stored.url,
+        size: stored.size,
+        mime_type: stored.mime_type,
+      });
     }
+
+    const finalAttachments = [...existingAttachments, ...newAttachments];
     return this.submissions.create(user.sub, {
       ...input,
-      attachments: attachments ?? undefined,
+      attachments: finalAttachments.length > 0 ? finalAttachments : undefined,
     });
   }
 
@@ -349,34 +378,60 @@ export class ContributorController {
   }
 
   @Patch('submissions/:id')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    AnyFilesInterceptor({
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+        files: 5,
+      },
+    }),
+  )
   @ApiOperation({ summary: 'Edit a draft / changes-requested submission' })
   @ApiConsumes('multipart/form-data', 'application/json')
   async updateSubmission(
     @Param() params: SubmissionIdParamDto,
     @Body() body: UpdateSubmissionDto,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFiles() files: Express.Multer.File[] | undefined,
     @Req() req: Request,
   ) {
     const user = req.user as { sub: string };
-    let attachments = body.attachments;
-    if (file) {
+    const existingAttachments = normalizeAttachments(body.attachments);
+
+    const uploadedFiles = files ?? [];
+    if (existingAttachments.length + uploadedFiles.length > 5) {
+      throw ApiException.validation('Maximum 5 documents allowed');
+    }
+
+    const newAttachments: Record<string, unknown>[] = [];
+    for (const file of uploadedFiles) {
+      if (file.size > 10 * 1024 * 1024) {
+        throw ApiException.validation(
+          `File "${file.originalname}" exceeds the maximum allowed size of 10 MB`,
+        );
+      }
       const stored = await this.uploads.storeAttachment({
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
         path: file.path,
       });
-      attachments = {
-        url: stored.url,
-        mime_type: stored.mime_type,
-        size: stored.size,
+      newAttachments.push({
+        name: stored.original_name,
         original_name: stored.original_name,
-      };
+        url: stored.url,
+        size: stored.size,
+        mime_type: stored.mime_type,
+      });
     }
+
+    let attachmentsToSave: Record<string, unknown>[] | undefined = undefined;
+    if (body.attachments !== undefined || uploadedFiles.length > 0) {
+      attachmentsToSave = [...existingAttachments, ...newAttachments];
+    }
+
     return this.submissions.update(params.id, user.sub, {
       ...body,
-      attachments,
+      attachments: attachmentsToSave,
     });
   }
 
@@ -563,6 +618,25 @@ export class ContributorController {
     const user = req.user as { sub: string };
     const updated = await this.notify.markRead({
       id: params.id,
+      recipientId: user.sub,
+    });
+    return {
+      id: updated.id,
+      read_state: updated.readState,
+      read_at: updated.readAt,
+    };
+  }
+
+  @Patch('notifications')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark a notification as read (by body)' })
+  async markNotificationReadBody(
+    @Body() body: NotificationMarkReadBodyDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as { sub: string };
+    const updated = await this.notify.markRead({
+      id: body.id,
       recipientId: user.sub,
     });
     return {

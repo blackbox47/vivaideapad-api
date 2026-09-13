@@ -24,6 +24,9 @@ export class Category {
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  icon!: string | null;
+
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 

@@ -9,11 +9,15 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Notification } from '../notifications/notification.entity';
 import { UsersService } from '../../users/users.service';
 import { User, USER_ROLES } from '../../users/entities/user.entity';
+import { Category } from '../categories/category.entity';
+import { Concept } from '../concepts/concept.entity';
 import { Application, ApplicationStatus } from './application.entity';
 import type {
   PublicCreateApplicationDto,
   ApplicationDecisionDto,
 } from './dto/applications.dto';
+
+export type ApplicantAiRisk = 'Low' | 'Medium' | 'High';
 
 export interface SerializedApplication {
   id: string;
@@ -32,6 +36,31 @@ export interface SerializedApplication {
   updated_at: Date;
 }
 
+export interface SerializedApplicationConcept {
+  id: string;
+  title: string;
+  brief: string;
+  reward_budget: string;
+  status: string;
+  close_date: Date | null;
+}
+
+export interface SerializedApplicationDetail extends SerializedApplication {
+  name: string;
+  email: string;
+  topic: string;
+  title: string;
+  body: string;
+  submitted: string;
+  source: string;
+  risk: ApplicantAiRisk;
+  user?: { id: string; name: string; email: string };
+  category?: { id: string; name: string; description?: string | null };
+  concept?: SerializedApplicationConcept | null;
+}
+
+const APPLICATION_SOURCE_WEBSITE = 'Website signup';
+
 const toSerialized = (a: Application): SerializedApplication => ({
   id: a.id,
   user_id: a.userId,
@@ -49,6 +78,67 @@ const toSerialized = (a: Application): SerializedApplication => ({
   updated_at: a.updatedAt,
 });
 
+/**
+ * Prefer a concept in the application category (onboarding, then active),
+ * then any onboarding concept so the review drawer can still show a topic card.
+ */
+export function pickConceptForApplication(
+  categoryId: string,
+  concepts: Concept[],
+): Concept | null {
+  const inCategory = concepts.filter((c) => c.categoryId === categoryId);
+  return (
+    inCategory.find((c) => c.isOnboarding) ??
+    inCategory.find((c) => c.status === 'active') ??
+    inCategory[0] ??
+    concepts.find((c) => c.isOnboarding) ??
+    null
+  );
+}
+
+export function deriveApplicationRisk(text: string): ApplicantAiRisk {
+  const length = text.trim().length;
+  if (length < 80) return 'High';
+  if (length < 220) return 'Medium';
+  return 'Low';
+}
+
+function toDetail(
+  a: Application,
+  user: User | null,
+  category: Category | null,
+  concept: Concept | null = null,
+): SerializedApplicationDetail {
+  const name = user?.displayName ?? user?.email ?? a.userId;
+  const email = user?.email ?? '';
+  const topic = concept?.title ?? category?.name ?? 'Uncategorized';
+  return {
+    ...toSerialized(a),
+    name,
+    email,
+    topic,
+    title: a.ideaTitle,
+    body: a.ideaDescription,
+    submitted: a.createdAt.toISOString(),
+    source: APPLICATION_SOURCE_WEBSITE,
+    risk: deriveApplicationRisk(`${a.ideaTitle} ${a.ideaDescription}`),
+    user: user ? { id: user.id, name, email } : undefined,
+    category: category
+      ? { id: category.id, name: category.name, description: category.description }
+      : undefined,
+    concept: concept
+      ? {
+          id: concept.id,
+          title: concept.title,
+          brief: concept.brief,
+          reward_budget: concept.rewardBudget,
+          status: concept.status,
+          close_date: concept.closeDate,
+        }
+      : null,
+  };
+}
+
 @Injectable()
 export class ApplicationsService {
   constructor(
@@ -57,6 +147,10 @@ export class ApplicationsService {
     private readonly repo: Repository<Application>,
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(Category)
+    private readonly categories: Repository<Category>,
+    @InjectRepository(Concept)
+    private readonly concepts: Repository<Concept>,
     private readonly usersService: UsersService,
     private readonly audit: AuditEventsService,
     private readonly notify: NotificationsService,
@@ -148,12 +242,29 @@ export class ApplicationsService {
     return { data: rows.map(toSerialized), total };
   }
 
-  async findOne(id: string): Promise<SerializedApplication> {
+  async findOne(id: string): Promise<SerializedApplicationDetail> {
     const found = await this.repo.findOne({
       where: { id, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Application');
-    return toSerialized(found);
+
+    const [user, category, relatedConcepts] = await Promise.all([
+      this.users.findOne({ where: { id: found.userId } }),
+      this.categories.findOne({ where: { id: found.categoryId } }),
+      this.concepts.find({
+        where: [
+          { categoryId: found.categoryId, deletedAt: IsNull() },
+          { isOnboarding: true, deletedAt: IsNull() },
+        ],
+      }),
+    ]);
+
+    return toDetail(
+      found,
+      user,
+      category,
+      pickConceptForApplication(found.categoryId, relatedConcepts),
+    );
   }
 
   async decide(input: {
@@ -188,7 +299,9 @@ export class ApplicationsService {
       }
 
       found.status = nextStatus;
-      found.decisionNotes = body.notes ?? null;
+      const notes =
+        body.decision === 'approve_invite' ? null : (body.notes ?? null);
+      found.decisionNotes = notes;
       found.decidedAt = new Date();
       found.decidedBy = actorId;
       const saved = await repo.save(found);
@@ -213,7 +326,7 @@ export class ApplicationsService {
         context: {
           previous_status: 'submitted',
           new_status: nextStatus,
-          notes: body.notes ?? null,
+          notes,
         },
       });
 
@@ -221,7 +334,7 @@ export class ApplicationsService {
         recipientId: found.userId,
         type: 'application_decision',
         title: titleForDecision(body.decision),
-        body: body.notes ?? undefined,
+        body: notes ?? undefined,
         linkedRecordType: 'application',
         linkedRecordId: found.id,
         payload: { decision: body.decision, status: nextStatus },
@@ -266,3 +379,10 @@ function randomTokenSegment(length = 4): string {
   }
   return out;
 }
+
+export const __testing = {
+  toDetail,
+  toSerialized,
+  pickConceptForApplication,
+  deriveApplicationRisk,
+};

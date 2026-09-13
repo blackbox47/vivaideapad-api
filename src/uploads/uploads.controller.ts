@@ -3,6 +3,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UploadedFile,
@@ -19,7 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs, createReadStream } from 'fs';
-import { extname, join, resolve, normalize } from 'path';
+import { basename, extname, join, resolve, normalize } from 'path';
 import type { Request, Response } from 'express';
 
 import { Public } from '../common/decorators/roles.decorator';
@@ -36,6 +37,20 @@ const MIME_BY_EXT: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.pdf': 'application/pdf',
 };
+
+function buildContentDisposition(
+  disposition: 'inline' | 'attachment',
+  filename: string,
+): string {
+  const cleaned = filename
+    .replace(/[\r\n]/g, '')
+    .replace(/[/\\]/g, '')
+    .trim()
+    .slice(0, 200);
+  const safe = cleaned || 'download';
+  const fallback = safe.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+}
 
 @ApiTags('Uploads')
 @Controller('uploads')
@@ -96,11 +111,12 @@ export class UploadsController {
 
   @Public()
   @Get(['files/*', 'files/:year/:month/:filename'])
-  @ApiOperation({ summary: 'Serve a stored attachment file' })
   async serve(
-    @Param() params: Record<string, string>,
     @Req() req: Request,
     @Res() res: Response,
+    @Param() params: Record<string, string>,
+    @Query('download') downloadFlag?: string,
+    @Query('filename') filename?: string,
   ) {
     const uploadDir = this.config.get<string>('uploads.dir')!;
     let rawPath =
@@ -140,7 +156,14 @@ export class UploadsController {
 
     const ext = extname(abs).toLowerCase();
     const contentType = MIME_BY_EXT[ext] ?? 'application/octet-stream';
+    const wantsDownload =
+      downloadFlag === '1' || downloadFlag === 'true' || downloadFlag === 'download';
+    const downloadName = filename?.trim() || basename(abs);
     res.setHeader('Content-Type', contentType);
+    res.setHeader(
+      'Content-Disposition',
+      buildContentDisposition(wantsDownload ? 'attachment' : 'inline', downloadName),
+    );
     createReadStream(abs).pipe(res);
   }
 }

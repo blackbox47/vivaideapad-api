@@ -7,13 +7,14 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 import { Submission } from '../../contributor/entities/submission.entity';
 import { LedgerEntry } from '../../contributor/entities/ledger-entry.entity';
 import { Concept } from '../concepts/concept.entity';
+import { User } from '../../users/entities/user.entity';
 import { AdminSubmissionsController } from './admin-submissions.controller';
 import { AdminSubmissionsService } from './admin-submissions.service';
 import { WalletService } from '../../contributor/wallet.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Submission, LedgerEntry, Concept]),
+    TypeOrmModule.forFeature([Submission, LedgerEntry, Concept, User]),
     AuditEventsModule,
     NotificationsModule,
     LeaderboardModule,
