@@ -18,6 +18,7 @@ import {
   AdminSubmissionDecisionDto,
   RiskScanResultDto,
 } from './dto/admin-submissions.dto';
+import { resolveRevisionWindow } from './revision-window';
 
 export interface SerializedAdminSubmission {
   id: string;
@@ -30,6 +31,8 @@ export interface SerializedAdminSubmission {
   risk_signal: Record<string, unknown> | null;
   reward_amount: string | null;
   decision_notes: string | null;
+  revision_window_days: number | null;
+  revision_due_at: Date | null;
   decided_at: Date | null;
   decided_by: string | null;
   created_at: Date;
@@ -73,6 +76,8 @@ const toSerialized = (s: Submission): SerializedAdminSubmission => ({
   risk_signal: s.riskSignal,
   reward_amount: s.rewardAmount,
   decision_notes: s.decisionNotes,
+  revision_window_days: s.revisionWindowDays,
+  revision_due_at: s.revisionDueAt,
   decided_at: s.decidedAt,
   decided_by: s.decidedBy,
   created_at: s.createdAt,
@@ -282,6 +287,12 @@ export class AdminSubmissionsService {
       found.decisionNotes = body.notes ?? null;
       found.decidedAt = new Date();
       found.decidedBy = actorId;
+      const revisionWindow = resolveRevisionWindow(
+        body.decision,
+        body.revision_window_days,
+      );
+      found.revisionWindowDays = revisionWindow.revisionWindowDays;
+      found.revisionDueAt = revisionWindow.revisionDueAt;
       if (body.decision === 'approve' && effectiveReward) {
         found.rewardAmount = effectiveReward.toFixed(2);
       }
@@ -320,6 +331,8 @@ export class AdminSubmissionsService {
           new_status: nextStatus,
           reward_amount: effectiveReward ?? null,
           notes: body.notes ?? null,
+          revision_window_days: revisionWindow.revisionWindowDays,
+          revision_due_at: revisionWindow.revisionDueAt?.toISOString() ?? null,
         },
       });
 
@@ -337,6 +350,8 @@ export class AdminSubmissionsService {
           decision: body.decision,
           status: nextStatus,
           reward_amount: effectiveReward ?? null,
+          revision_window_days: revisionWindow.revisionWindowDays,
+          revision_due_at: revisionWindow.revisionDueAt?.toISOString() ?? null,
         },
       });
 

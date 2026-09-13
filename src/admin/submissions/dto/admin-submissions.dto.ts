@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
 import { SUBMISSION_STATUSES } from '../../../contributor/entities/submission.entity';
+import { RevisionWindowDaysSchema } from '../revision-window';
 
 export const AdminSubmissionDecisionSchema = z.object({
   decision: z.enum(['approve', 'reject', 'request_changes']),
   reward_amount: z.coerce.number().positive().optional(),
   notes: z.string().max(2000).optional(),
+  revision_window_days: RevisionWindowDaysSchema.optional(),
 });
 export class AdminSubmissionDecisionDto extends createZodDto(
   AdminSubmissionDecisionSchema,

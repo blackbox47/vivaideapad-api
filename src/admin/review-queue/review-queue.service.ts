@@ -9,6 +9,7 @@ import {
   SubmissionStatus as BackendSubmissionStatus,
 } from '../../contributor/entities/submission.entity';
 import { AdminSubmissionsService } from '../submissions/admin-submissions.service';
+import type { RevisionWindowDays } from '../submissions/revision-window';
 import { ApiException } from '../../common/exceptions/api-exception';
 
 /**
@@ -35,6 +36,8 @@ export interface ContentSubmission {
   body: string;
   approvedCount: number;
   approvalRate: string;
+  revisionWindowDays: number | null;
+  revisionDueAt: string | null;
 }
 
 export type SubmissionStatus =
@@ -48,6 +51,7 @@ export type LegacyDecideBody = {
   status: SubmissionStatus;
   comment?: string;
   reward_amount?: number;
+  revision_window_days?: RevisionWindowDays;
 };
 
 @Injectable()
@@ -104,6 +108,10 @@ export class ReviewQueueService {
         body: s.body,
         approvedCount: approved,
         approvalRate: approvalRateFor(approved, decided),
+        revisionWindowDays: s.revisionWindowDays,
+        revisionDueAt: s.revisionDueAt
+          ? s.revisionDueAt.toISOString()
+          : null,
       };
     });
 
@@ -138,6 +146,9 @@ export class ReviewQueueService {
         decision,
         notes: body.comment,
         reward_amount: body.reward_amount,
+        ...(body.revision_window_days != null
+          ? { revision_window_days: body.revision_window_days }
+          : {}),
       },
     });
     return this.queue();

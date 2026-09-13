@@ -41,6 +41,34 @@ describe('toDetail', () => {
     expect(detail.submitted).toBe('2026-09-11T00:00:00.000Z');
     expect(detail.source).toBe('Website signup');
     expect(detail.consent).toBe(true);
+    expect(detail.risk).toBe('High');
+    expect(detail.concept).toBeNull();
+  });
+
+  it('uses the joined concept for topic title, brief, reward and close date', () => {
+    const concept = {
+      id: 'concept-1',
+      categoryId: 'cat-1',
+      title: 'Recharge reminder that feels personal',
+      brief: 'Design a recharge nudge that feels helpful — not spammy — for prepaid users.',
+      rewardBudget: '25000.00',
+      status: 'active',
+      closeDate: new Date('2026-10-25T00:00:00.000Z'),
+      isOnboarding: true,
+    };
+
+    const detail = toDetail(
+      application as never,
+      { id: 'user-1', displayName: 'Rafiqul Islam', email: 'rafiqul.islam@example.com' } as never,
+      { id: 'cat-1', name: 'Network & Coverage' } as never,
+      concept as never,
+    );
+
+    expect(detail.topic).toBe('Recharge reminder that feels personal');
+    expect(detail.concept?.title).toBe('Recharge reminder that feels personal');
+    expect(detail.concept?.brief).toContain('recharge nudge');
+    expect(detail.concept?.reward_budget).toBe('25000.00');
+    expect(detail.concept?.close_date).toEqual(new Date('2026-10-25T00:00:00.000Z'));
   });
 
   it('falls back when user or category is missing', () => {
@@ -51,5 +79,7 @@ describe('toDetail', () => {
     expect(detail.topic).toBe('Uncategorized');
     expect(detail.user).toBeUndefined();
     expect(detail.category).toBeUndefined();
+    expect(detail.concept).toBeNull();
+    expect(detail.risk).toBe('High');
   });
 });

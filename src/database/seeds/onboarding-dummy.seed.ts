@@ -9,6 +9,7 @@ import {
   USER_ROLES,
 } from '../../users/entities/user.entity';
 import { Category } from '../../admin/categories/category.entity';
+import { Concept } from '../../admin/concepts/concept.entity';
 import {
   Application,
   ApplicationStatus,
@@ -21,6 +22,9 @@ interface SeedApplication {
 
 const DUMMY_CATEGORY_SLUG = 'onboarding-dummy';
 const DUMMY_CATEGORY_NAME = 'Onboarding Testing';
+const DUMMY_CONCEPT_TITLE = 'First-week ideas from new contributors';
+const DUMMY_CONCEPT_BRIEF =
+  'Collect practical onboarding improvements from people who just joined — what was confusing, what helped, and what should change.';
 
 const DUMMY_USER_EMAIL = 'dummy.onboarding@viva.local';
 const DUMMY_USER_DISPLAY_NAME = 'Dummy Onboarding Tester';
@@ -168,6 +172,43 @@ async function ensureCategory(
   return cat;
 }
 
+async function ensureConcept(
+  repo: import('typeorm').Repository<Concept>,
+  category: Category,
+): Promise<Concept> {
+  let concept = await repo.findOne({
+    where: { title: DUMMY_CONCEPT_TITLE },
+    withDeleted: true,
+  });
+  const closeDate = new Date('2026-10-25T00:00:00.000Z');
+  if (!concept) {
+    concept = repo.create({
+      categoryId: category.id,
+      title: DUMMY_CONCEPT_TITLE,
+      brief: DUMMY_CONCEPT_BRIEF,
+      rewardBudget: '25000.00',
+      isOnboarding: true,
+      status: 'active',
+      metadata: { slug: 'onboarding-dummy-concept' },
+      openDate: new Date(),
+      closeDate,
+    });
+    await repo.save(concept);
+    console.log(`  ✓ concept "${DUMMY_CONCEPT_TITLE}"`);
+  } else {
+    if (concept.deletedAt) concept.deletedAt = null;
+    concept.categoryId = category.id;
+    concept.brief = DUMMY_CONCEPT_BRIEF;
+    concept.rewardBudget = '25000.00';
+    concept.isOnboarding = true;
+    concept.status = 'active';
+    concept.closeDate = closeDate;
+    await repo.save(concept);
+    console.log(`  ↻ concept "${DUMMY_CONCEPT_TITLE}" ready`);
+  }
+  return concept;
+}
+
 async function ensureDummyUser(
   repo: import('typeorm').Repository<User>,
   password: string,
@@ -254,9 +295,11 @@ async function seed(): Promise<void> {
   try {
     const userRepo = AppDataSource.getRepository(User);
     const categoryRepo = AppDataSource.getRepository(Category);
+    const conceptRepo = AppDataSource.getRepository(Concept);
     const applicationRepo = AppDataSource.getRepository(Application);
 
     const category = await ensureCategory(categoryRepo);
+    await ensureConcept(conceptRepo, category);
     const dummyUser = await ensureDummyUser(userRepo, DUMMY_USER_PASSWORD);
     const { created, referenceNumbers } = await ensureApplications(
       applicationRepo,

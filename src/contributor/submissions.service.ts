@@ -27,6 +27,8 @@ export interface SerializedSubmission {
   risk_signal: Record<string, unknown> | null;
   reward_amount: string | null;
   decision_notes: string | null;
+  revision_window_days: number | null;
+  revision_due_at: Date | null;
   decided_at: Date | null;
   decided_by: string | null;
   created_at: Date;
@@ -54,6 +56,8 @@ const toSerialized = (
   risk_signal: s.riskSignal,
   reward_amount: s.rewardAmount,
   decision_notes: s.decisionNotes,
+  revision_window_days: s.revisionWindowDays,
+  revision_due_at: s.revisionDueAt,
   decided_at: s.decidedAt,
   decided_by: s.decidedBy,
   created_at: s.createdAt,

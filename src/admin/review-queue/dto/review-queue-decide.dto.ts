@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
+import { RevisionWindowDaysSchema } from '../../submissions/revision-window';
+
 /**
  * Legacy PATCH body used by `useDecideSubmissionMutation` in the SPA
  * (vivaideapad-admin/src/services/content-review/content-review-service.ts:65-72).
@@ -22,6 +24,7 @@ export const ReviewQueueDecideSchema = z.object({
   ]),
   comment: z.string().max(2000).optional(),
   reward_amount: z.coerce.number().positive().optional(),
+  revision_window_days: RevisionWindowDaysSchema.optional(),
 });
 export class ReviewQueueDecideDto extends createZodDto(
   ReviewQueueDecideSchema,

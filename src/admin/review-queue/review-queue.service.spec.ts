@@ -82,6 +82,47 @@ describe('ReviewQueueService', () => {
       },
     });
   });
+
+  it('forwards revision_window_days when requesting changes', async () => {
+    const decideMock = jest.fn().mockResolvedValue({});
+    const submissionsRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<Submission>;
+    const usersRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<User>;
+    const conceptsRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<Concept>;
+    const adminSubmissions = {
+      decide: decideMock,
+    } as unknown as AdminSubmissionsService;
+
+    const service = new ReviewQueueService(
+      submissionsRepo,
+      usersRepo,
+      conceptsRepo,
+      adminSubmissions,
+    );
+
+    await service.decide('admin-user-id', {
+      id: '1bd42d11-2ae1-44e0-a409-2313bd6a0497',
+      status: 'Revision Requested',
+      comment: 'Please expand the KPI section',
+      revision_window_days: 14,
+    });
+
+    expect(decideMock).toHaveBeenCalledWith({
+      id: '1bd42d11-2ae1-44e0-a409-2313bd6a0497',
+      actorId: 'admin-user-id',
+      body: {
+        decision: 'request_changes',
+        notes: 'Please expand the KPI section',
+        reward_amount: undefined,
+        revision_window_days: 14,
+      },
+    });
+  });
 });
 
 describe('submissionStatusFor', () => {

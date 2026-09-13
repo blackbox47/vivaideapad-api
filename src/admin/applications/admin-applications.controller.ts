@@ -67,7 +67,10 @@ export class AdminApplicationsController {
     return this.apps.decide({
       id: body.id,
       actorId: actor.id,
-      body: { decision, notes: body.comment },
+      body:
+        decision === 'approve_invite'
+          ? { decision }
+          : { decision, notes: body.comment },
     });
   }
 
@@ -99,7 +102,10 @@ export class AdminApplicationsController {
     return this.apps.decide({
       id: params.id,
       actorId: actor.id,
-      body: { decision, notes: body.comment },
+      body:
+        decision === 'approve_invite'
+          ? { decision }
+          : { decision, notes: body.comment },
     });
   }
 

@@ -35,10 +35,24 @@ export class PublicCreateApplicationDto extends createZodDto(
   PublicApplicationCreateSchema,
 ) {}
 
-export const DecisionSchema = z.object({
-  decision: z.enum(['approve_invite', 'reject', 'request_more_info']),
-  notes: z.string().max(2000).optional(),
-});
+export const DecisionSchema = z
+  .object({
+    decision: z.enum(['approve_invite', 'reject', 'request_more_info']),
+    notes: z.string().max(2000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.decision === 'approve_invite' &&
+      data.notes != null &&
+      data.notes.trim() !== ''
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Approval does not accept notes',
+        path: ['notes'],
+      });
+    }
+  });
 export class ApplicationDecisionDto extends createZodDto(DecisionSchema) {}
 
 export const ApplicationListQuerySchema = z.object({

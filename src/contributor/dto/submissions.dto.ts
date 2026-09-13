@@ -27,6 +27,8 @@ export const SubmissionSchema = z.object({
   risk_signal: z.record(z.string(), z.unknown()).nullable(),
   reward_amount: z.string().nullable(),
   decision_notes: z.string().nullable(),
+  revision_window_days: z.number().int().nullable(),
+  revision_due_at: z.iso.datetime().nullable(),
   decided_at: z.iso.datetime().nullable(),
   decided_by: z.uuid().nullable(),
   created_at: z.iso.datetime(),
