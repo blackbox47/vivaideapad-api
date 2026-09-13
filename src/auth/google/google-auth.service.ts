@@ -43,6 +43,15 @@ export class GoogleAuthService {
     ua?: string;
   }): Promise<AuthTokens> {
     const { user } = await this.verifyAndResolveIdentity(input.credential);
+    if (
+      user.role === USER_ROLES.ADMINISTRATOR ||
+      user.role === USER_ROLES.SUPERADMIN
+    ) {
+      throw ApiException.forbidden(
+        'contributor_required',
+        'Please use the admin portal to sign in with this account',
+      );
+    }
     // Delegate token minting, suspended check, and cookie data creation to AuthService.
     // `signInForExistingUser` itself rejects `pending_review`, so a freshly
     // Google-signed-up user lands here too — kept consistent with the

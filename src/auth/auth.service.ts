@@ -135,13 +135,29 @@ export class AuthService {
     password: string;
     ua?: string;
   }): Promise<AuthTokens> {
-    const user = await this.users.findByEmail(input.email);
-    if (!user || !user.passwordHash) {
-      throw ApiException.unauthorized('Invalid email or password');
-    }
-    const matches = await bcrypt.compare(input.password, user.passwordHash);
-    if (!matches) {
-      throw ApiException.unauthorized('Invalid email or password');
+    const user = await this.authenticateWithPassword(input);
+    return this.signInForExistingUser(user, input.ua);
+  }
+
+  /**
+   * Contributor-portal sign-in (`POST /auth/sign-in`). Rejects admin /
+   * superadmin accounts after a successful credential match so those users
+   * must use the admin portal instead.
+   */
+  async signInContributor(input: {
+    email: string;
+    password: string;
+    ua?: string;
+  }): Promise<AuthTokens> {
+    const user = await this.authenticateWithPassword(input);
+    if (
+      user.role === USER_ROLES.ADMINISTRATOR ||
+      user.role === USER_ROLES.SUPERADMIN
+    ) {
+      throw ApiException.forbidden(
+        'contributor_required',
+        'Please use the admin portal to sign in with this account',
+      );
     }
     return this.signInForExistingUser(user, input.ua);
   }
@@ -160,30 +176,40 @@ export class AuthService {
   }
 
   /**
-   * Admin-only sign-in. Delegates credential verification to `signIn(...)`
-   * so the bcrypt check + suspended-account guard stay in a single place,
-   * then enforces the admin role gate AFTER a successful credential match.
-   * Non-admin (e.g. CONTRIBUTOR) users are rejected with a 403 — distinct
-   * from the 401 returned for bad credentials, so the SPA can show an
-   * "admin access required" message and the endpoint is not appropriate
-   * for password-spraying enumeration of admin accounts.
+   * Admin-only sign-in. Verifies credentials, then enforces the admin role
+   * gate BEFORE minting tokens. Non-admin users get `403 admin_required`.
    */
   async signInAdmin(input: {
     email: string;
     password: string;
     ua?: string;
   }): Promise<AuthTokens> {
-    const tokens = await this.signIn(input);
+    const user = await this.authenticateWithPassword(input);
     if (
-      tokens.user.role !== USER_ROLES.ADMINISTRATOR &&
-      tokens.user.role !== USER_ROLES.SUPERADMIN
+      user.role !== USER_ROLES.ADMINISTRATOR &&
+      user.role !== USER_ROLES.SUPERADMIN
     ) {
       throw ApiException.forbidden(
         'admin_required',
         'Admin access is required to sign in here',
       );
     }
-    return tokens;
+    return this.signInForExistingUser(user, input.ua);
+  }
+
+  private async authenticateWithPassword(input: {
+    email: string;
+    password: string;
+  }): Promise<User> {
+    const user = await this.users.findByEmail(input.email);
+    if (!user || !user.passwordHash) {
+      throw ApiException.unauthorized('Invalid email or password');
+    }
+    const matches = await bcrypt.compare(input.password, user.passwordHash);
+    if (!matches) {
+      throw ApiException.unauthorized('Invalid email or password');
+    }
+    return user;
   }
 
   async refresh(input: {
