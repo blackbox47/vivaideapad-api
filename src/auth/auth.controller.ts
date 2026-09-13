@@ -62,7 +62,14 @@ export class AuthController {
   }
 
   @Public()
-  @ApiOperation({ summary: 'Sign in and obtain access + refresh tokens' })
+  @ApiOperation({
+    summary: 'Contributor sign-in (portal / creator workspace)',
+    description:
+      'Rejects ADMINISTRATOR and SUPERADMIN accounts with ' +
+      '`403 contributor_required` after a successful credential match so ' +
+      'admins must use `POST /auth/admin/sign-in`. Bad credentials still ' +
+      'produce the generic `401 Invalid email or password` response.',
+  })
   @ApiOkResponse({
     description: 'Tokens are set as HttpOnly cookies; body returns the user.',
     type: TokensDto,
@@ -75,7 +82,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const ua = req.headers['user-agent'] ?? '';
-    const tokens = await this.auth.signIn({ ...input, ua });
+    const tokens = await this.auth.signInContributor({ ...input, ua });
     setAuthCookies(res, this.config, {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
@@ -89,6 +96,9 @@ export class AuthController {
   @Public()
   @ApiOperation({
     summary: 'Google Sign-In for creators (credential exchange)',
+    description:
+      'Rejects ADMINISTRATOR and SUPERADMIN Google-linked accounts with ' +
+      '`403 contributor_required` — admins must use the admin portal.',
   })
   @ApiOkResponse({
     description: 'Tokens are set as HttpOnly cookies; body returns the user.',
