@@ -21,6 +21,7 @@ export interface SerializedSubmission {
     title: string;
   } | null;
   title: string;
+  summary: string | null;
   body: string;
   attachments: Record<string, unknown>[] | Record<string, unknown> | null;
   status: SubmissionStatus;
@@ -50,6 +51,7 @@ const toSerialized = (
       }
     : null,
   title: s.title,
+  summary: s.summary,
   body: s.body,
   attachments: s.attachments,
   status: s.status,
@@ -63,6 +65,11 @@ const toSerialized = (
   created_at: s.createdAt,
   updated_at: s.updatedAt,
 });
+
+function normalizeSummary(value?: string): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 @Injectable()
 export class SubmissionsService {
@@ -141,6 +148,7 @@ export class SubmissionsService {
       userId,
       conceptId: input.concept_id,
       title: input.title,
+      summary: normalizeSummary(input.summary),
       body: input.body,
       attachments: attachments.length > 0 ? attachments : null,
       status: 'draft',
@@ -169,6 +177,7 @@ export class SubmissionsService {
     }
     if (patch.concept_id !== undefined) found.conceptId = patch.concept_id;
     if (patch.title !== undefined) found.title = patch.title;
+    if (patch.summary !== undefined) found.summary = normalizeSummary(patch.summary);
     if (patch.body !== undefined) found.body = patch.body;
     if (patch.attachments !== undefined) {
       const attachments = normalizeAttachments(patch.attachments);

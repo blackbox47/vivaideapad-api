@@ -25,7 +25,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         // `pnpm migration:run`.
         synchronize: config.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         charset: 'utf8mb4',
-        timezone: 'Z',
+        timezone: '+06:00',
         logging: ['error', 'warn'] as const,
       }),
     }),

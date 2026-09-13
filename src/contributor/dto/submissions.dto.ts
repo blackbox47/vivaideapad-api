@@ -16,6 +16,7 @@ export const SubmissionSchema = z.object({
     .nullable()
     .optional(),
   title: z.string(),
+  summary: z.string().nullable().optional(),
   body: z.string(),
   attachments: z
     .union([
@@ -88,6 +89,7 @@ export const AttachmentsFieldSchema = z
 export const CreateSubmissionSchema = z.object({
   concept_id: z.uuid(),
   title: z.string().min(1).max(255),
+  summary: z.string().trim().max(240).optional(),
   body: z.string().min(1).max(20_000),
   attachments: AttachmentsFieldSchema,
 });
@@ -96,6 +98,7 @@ export class CreateSubmissionDto extends createZodDto(CreateSubmissionSchema) {}
 export const UpdateSubmissionSchema = z.object({
   concept_id: z.uuid().optional(),
   title: z.string().min(1).max(255).optional(),
+  summary: z.string().trim().max(240).optional(),
   body: z.string().min(1).max(20_000).optional(),
   attachments: AttachmentsFieldSchema,
 });

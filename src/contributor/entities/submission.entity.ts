@@ -34,6 +34,9 @@ export class Submission {
   @Column({ type: 'varchar', length: 255 })
   title!: string;
 
+  @Column({ type: 'varchar', length: 240, nullable: true })
+  summary!: string | null;
+
   @Column({ type: 'text' })
   body!: string;
 
