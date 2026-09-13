@@ -284,7 +284,8 @@ export class AdminSubmissionsService {
       }
 
       found.status = nextStatus;
-      found.decisionNotes = body.notes ?? null;
+      const notes = body.notes?.trim() || null;
+      found.decisionNotes = notes;
       found.decidedAt = new Date();
       found.decidedBy = actorId;
       const revisionWindow = resolveRevisionWindow(
@@ -330,7 +331,7 @@ export class AdminSubmissionsService {
           previous_status: 'pending_review',
           new_status: nextStatus,
           reward_amount: effectiveReward ?? null,
-          notes: body.notes ?? null,
+          notes,
           revision_window_days: revisionWindow.revisionWindowDays,
           revision_due_at: revisionWindow.revisionDueAt?.toISOString() ?? null,
         },
@@ -343,7 +344,7 @@ export class AdminSubmissionsService {
             ? 'submission_request_revision'
             : 'submission_decision',
         title: titleForSubmissionDecision(body.decision, effectiveReward),
-        body: body.notes ?? undefined,
+        body: notes ?? undefined,
         linkedRecordType: 'submission',
         linkedRecordId: found.id,
         payload: {
