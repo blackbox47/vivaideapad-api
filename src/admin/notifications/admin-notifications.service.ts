@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository, In } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
@@ -26,8 +26,18 @@ export interface SerializedAdminNotification {
   linked_record_type: string | null;
   linked_record_id: string | null;
   read_state: NotificationReadState;
-  read_at: Date | null;
-  created_at: Date;
+  read_at: string | null;
+  created_at: string;
+}
+
+function toUtcIso(value: Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 @Injectable()
@@ -52,61 +62,46 @@ export class AdminNotificationsService {
   }> {
     const qb = this.repo
       .createQueryBuilder('n')
-      .leftJoin(User, 'u', 'u.id = n.recipient_id')
-      .where('n.recipient_id = :rid', { rid: input.recipientId })
-      .andWhere('n.deleted_at IS NULL')
-      .select([
-        'n.id AS id',
-        'n.recipient_id AS recipient_id',
-        'u.email AS recipient_email',
-        'n.type AS type',
-        'n.title AS title',
-        'n.body AS body',
-        'n.payload AS payload',
-        'n.linked_record_type AS linked_record_type',
-        'n.linked_record_id AS linked_record_id',
-        'n.read_state AS read_state',
-        'n.read_at AS read_at',
-        'n.created_at AS created_at',
-      ]);
+      .where('n.recipientId = :rid', { rid: input.recipientId })
+      .andWhere('n.deletedAt IS NULL');
     if (input.read_state) {
-      qb.andWhere('n.read_state = :rs', { rs: input.read_state });
+      qb.andWhere('n.readState = :rs', { rs: input.read_state });
     }
-    qb.orderBy('n.created_at', 'DESC')
+    qb.orderBy('n.createdAt', 'DESC')
+      .addOrderBy('n.id', 'DESC')
       .skip((input.page - 1) * input.limit)
       .take(input.limit);
-    const [rows, total] = await Promise.all([qb.getRawMany(), qb.getCount()]);
+
+    // Use entity hydration (not getRawMany) so TypeORM timezone conversion
+    // produces correct absolute timestamps for relative "time ago" labels.
+    const [rows, total] = await qb.getManyAndCount();
+
+    const recipientIds = [...new Set(rows.map((row) => row.recipientId))];
+    const recipients =
+      recipientIds.length === 0
+        ? []
+        : await this.users.find({
+            where: { id: In(recipientIds) },
+            select: ['id', 'email'],
+            withDeleted: true,
+          });
+    const emailById = new Map(recipients.map((u) => [u.id, u.email]));
+
     return {
-      data: rows.map((r: Record<string, unknown>) => {
-        const get = (k: string): string | null => {
-          const v = r[k];
-          if (typeof v === 'string') return v;
-          if (v == null) return null;
-          return (v as { toString(): string }).toString();
-        };
-        return {
-          id: String(r.id),
-          recipient_id: String(r.recipient_id),
-          recipient_email: get('recipient_email'),
-          type: String(r.type),
-          title: String(r.title),
-          body: get('body'),
-          payload: (r.payload as Record<string, unknown> | null) ?? null,
-          linked_record_type: get('linked_record_type'),
-          linked_record_id: get('linked_record_id'),
-          read_state: String(r.read_state) as NotificationReadState,
-          read_at:
-            r.read_at instanceof Date
-              ? r.read_at
-              : r.read_at
-                ? new Date((r.read_at as { toString(): string }).toString())
-                : null,
-          created_at:
-            r.created_at instanceof Date
-              ? r.created_at
-              : new Date((r.created_at as { toString(): string }).toString()),
-        };
-      }),
+      data: rows.map((row) => ({
+        id: row.id,
+        recipient_id: row.recipientId,
+        recipient_email: emailById.get(row.recipientId) ?? null,
+        type: row.type,
+        title: row.title,
+        body: row.body,
+        payload: row.payload,
+        linked_record_type: row.linkedRecordType,
+        linked_record_id: row.linkedRecordId,
+        read_state: row.readState,
+        read_at: toUtcIso(row.readAt),
+        created_at: toUtcIso(row.createdAt) ?? new Date(0).toISOString(),
+      })),
       meta: buildPaginationMeta(input.page, input.limit, total),
     };
   }
@@ -183,17 +178,16 @@ export class AdminNotificationsService {
     const found = await this.repo.findOne({
       where: { id, deletedAt: IsNull() },
     });
-    if (!found) throw ApiException.notFound('Notification');
-    await this.dataSource.transaction(async (manager) => {
-      await manager.getRepository(Notification).softRemove(found);
-      await this.audit.record(manager, {
-        actorId,
-        action: 'notification.deleted',
-        targetType: 'notification',
-        targetId: id,
-        category: 'notifications',
-        context: { recipient_id: found.recipientId },
-      });
+    if (!found) {
+      throw ApiException.notFound('Notification not found');
+    }
+    await this.repo.softDelete(id);
+    await this.audit.recordStandalone({
+      actorId,
+      action: 'notification.deleted',
+      targetType: 'notification',
+      targetId: id,
+      category: 'notifications',
     });
   }
 }

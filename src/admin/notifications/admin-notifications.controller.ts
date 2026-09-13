@@ -1,14 +1,17 @@
 import {
-  Body,
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   MessageEvent,
   Param,
+  Patch,
   Post,
   Query,
   Sse,
   UseGuards,
+  Body,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Observable, interval, merge } from 'rxjs';
@@ -25,6 +28,7 @@ import {
 import { JwtAccessGuard } from '../../auth/guards/jwt-access.guard';
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AdminNotificationsService } from './admin-notifications.service';
+import { NotificationsService } from './notifications.service';
 import { NotificationsStreamService } from './notifications-stream.service';
 import { USER_ROLES, isUserRole } from '../../users/entities/user.entity';
 
@@ -70,6 +74,7 @@ class BroadcastDto extends createZodDto(BroadcastSchema) {}
 export class AdminNotificationsController {
   constructor(
     private readonly notifications: AdminNotificationsService,
+    private readonly inbox: NotificationsService,
     private readonly stream: NotificationsStreamService,
   ) {}
 
@@ -80,7 +85,6 @@ export class AdminNotificationsController {
   })
   streamAdmin(@CurrentUser() actor: { id: string }): Observable<MessageEvent> {
     const data$ = this.stream.subscribe(actor.id);
-    // 15s heartbeat keeps proxies from dropping idle connections.
     const heartbeat$ = interval(15_000).pipe(
       map(
         () =>
@@ -123,6 +127,35 @@ export class AdminNotificationsController {
       data: result.data,
       meta: buildPaginationMeta(page, limit, result.meta.total),
     };
+  }
+
+  @Patch(':id/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark one of my notifications as read' })
+  async markRead(
+    @Param() params: IdParamDto,
+    @CurrentUser() actor: { id: string },
+  ) {
+    try {
+      const updated = await this.inbox.markRead({
+        id: params.id,
+        recipientId: actor.id,
+      });
+      return {
+        id: updated.id,
+        read_state: updated.readState,
+        read_at: updated.readAt?.toISOString?.() ?? updated.readAt,
+      };
+    } catch {
+      throw ApiException.notFound('Notification not found');
+    }
+  }
+
+  @Post('read-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark all my notifications as read' })
+  async markAllRead(@CurrentUser() actor: { id: string }) {
+    return this.inbox.markAllRead(actor.id);
   }
 
   @Post('broadcast')

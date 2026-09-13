@@ -35,6 +35,11 @@ export interface ContentSubmission {
   body: string;
   approvedCount: number;
   approvalRate: string;
+  /** Present when the contributor uploaded supporting evidence. */
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentSize?: number | null;
 }
 
 export type SubmissionStatus =
@@ -93,6 +98,12 @@ export class ReviewQueueService {
       const c = conceptById.get(s.conceptId);
       const approved = approvalCounts.get(s.userId) ?? 0;
       const decided = totalDecidedCounts.get(s.userId) ?? 0;
+      const attachments =
+        s.attachments && typeof s.attachments === 'object'
+          ? s.attachments
+          : null;
+      const attachmentUrl =
+        typeof attachments?.url === 'string' ? attachments.url : null;
       return {
         id: s.id,
         title: s.title,
@@ -104,6 +115,17 @@ export class ReviewQueueService {
         body: s.body,
         approvedCount: approved,
         approvalRate: approvalRateFor(approved, decided),
+        attachmentUrl,
+        attachmentName:
+          typeof attachments?.original_name === 'string'
+            ? attachments.original_name
+            : null,
+        attachmentMimeType:
+          typeof attachments?.mime_type === 'string'
+            ? attachments.mime_type
+            : null,
+        attachmentSize:
+          typeof attachments?.size === 'number' ? attachments.size : null,
       };
     });
 

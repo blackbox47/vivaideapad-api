@@ -93,7 +93,8 @@ export class NotificationsService {
     if (input.read_state) {
       qb.andWhere('n.read_state = :rs', { rs: input.read_state });
     }
-    qb.orderBy('n.created_at', 'DESC')
+    qb.orderBy('n.createdAt', 'DESC')
+      .addOrderBy('n.id', 'DESC')
       .skip((input.page - 1) * input.limit)
       .take(input.limit);
     const [data, total] = await qb.getManyAndCount();

@@ -25,7 +25,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         // `pnpm migration:run`.
         synchronize: config.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         charset: 'utf8mb4',
-        timezone: 'Z',
+        // MySQL DATETIME values in this project are written in Bangladesh
+        // local time (SYSTEM/+06:00). Using UTC ('Z') made fresh notifications
+        // appear ~6 hours off in the UI.
+        timezone: '+06:00',
         logging: ['error', 'warn'] as const,
       }),
     }),

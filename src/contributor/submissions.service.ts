@@ -163,7 +163,41 @@ export class SubmissionsService {
     }
     if (patch.title !== undefined) found.title = patch.title;
     if (patch.body !== undefined) found.body = patch.body;
-    if (patch.attachments !== undefined) found.attachments = patch.attachments;
+    if (patch.attachments !== undefined) {
+      if (patch.attachments === null) {
+        found.attachments = null;
+      } else {
+        // Merge so a partial client patch cannot wipe `original_name` / size.
+        const prev =
+          found.attachments && typeof found.attachments === 'object'
+            ? found.attachments
+            : {};
+        const nextName = patch.attachments.original_name;
+        const prevName = prev.original_name;
+        const nextMime = patch.attachments.mime_type;
+        const prevMime = prev.mime_type;
+        const nextSize = patch.attachments.size;
+        const prevSize = prev.size;
+        found.attachments = {
+          ...prev,
+          ...patch.attachments,
+          original_name:
+            (typeof nextName === 'string' && nextName) ||
+            (typeof prevName === 'string' && prevName) ||
+            null,
+          mime_type:
+            (typeof nextMime === 'string' && nextMime) ||
+            (typeof prevMime === 'string' && prevMime) ||
+            null,
+          size:
+            typeof nextSize === 'number'
+              ? nextSize
+              : typeof prevSize === 'number'
+                ? prevSize
+                : null,
+        };
+      }
+    }
     const saved = await this.repo.save(found);
     const concept = saved.conceptId
       ? await this.conceptRepo.findOne({ where: { id: saved.conceptId } })

@@ -301,7 +301,7 @@ export class ContributorController {
     let attachments = input.attachments ?? null;
     if (file) {
       const stored = await this.uploads.storeAttachment({
-        originalname: file.originalname,
+        originalname: Buffer.from(file.originalname, 'latin1').toString('utf8'),
         mimetype: file.mimetype,
         size: file.size,
         path: file.path,
@@ -362,7 +362,7 @@ export class ContributorController {
     let attachments = body.attachments;
     if (file) {
       const stored = await this.uploads.storeAttachment({
-        originalname: file.originalname,
+        originalname: Buffer.from(file.originalname, 'latin1').toString('utf8'),
         mimetype: file.mimetype,
         size: file.size,
         path: file.path,
@@ -546,8 +546,11 @@ export class ContributorController {
         linked_record_type: n.linkedRecordType,
         linked_record_id: n.linkedRecordId,
         read_state: n.readState,
-        read_at: n.readAt,
-        created_at: n.createdAt,
+        read_at: n.readAt?.toISOString?.() ?? n.readAt ?? null,
+        created_at:
+          n.createdAt instanceof Date
+            ? n.createdAt.toISOString()
+            : new Date(n.createdAt).toISOString(),
       })),
       meta: buildPaginationMeta(page, limit, total),
     };

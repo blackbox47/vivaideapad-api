@@ -16,5 +16,6 @@ export const AppDataSource = new DataSource({
   migrations: [__dirname + '/migrations/*.{ts,js}'],
   synchronize: false,
   charset: 'utf8mb4',
-  timezone: 'Z',
+  // Match Nest DatabaseModule — DATETIME columns are Bangladesh local (+06:00).
+  timezone: '+06:00',
 });
