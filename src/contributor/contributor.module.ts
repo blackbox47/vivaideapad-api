@@ -10,13 +10,14 @@ import { LedgerEntry } from './entities/ledger-entry.entity';
 import { Submission } from './entities/submission.entity';
 import { Notification } from '../admin/notifications/notification.entity';
 import { Concept } from '../admin/concepts/concept.entity';
+import { User } from '../users/entities/user.entity';
 import { ContributorController } from './contributor.controller';
 import { SubmissionsService } from './submissions.service';
 import { WalletService } from './wallet.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Submission, LedgerEntry, Notification, Concept]),
+    TypeOrmModule.forFeature([Submission, LedgerEntry, Notification, Concept, User]),
     ConceptsModule,
     NotificationsModule,
     PayoutsModule,

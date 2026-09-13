@@ -11,6 +11,7 @@ export const NOTIFICATION_TYPES = [
   'application_decision',
   'submission_decision',
   'submission_request_revision',
+  'submission_submitted',
   'payout_status_changed',
   'payout_decision',
   'access_status_changed',

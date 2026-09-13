@@ -16,5 +16,5 @@ export const AppDataSource = new DataSource({
   migrations: [__dirname + '/migrations/*.{ts,js}'],
   synchronize: false,
   charset: 'utf8mb4',
-  timezone: '+06:00',
+  timezone: 'Z',
 });
