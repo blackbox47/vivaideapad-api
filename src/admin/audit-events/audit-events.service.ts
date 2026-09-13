@@ -21,6 +21,8 @@ export interface SerializedAuditEvent {
   action: string;
   target_id: string;
   target_type: string;
+  /** Present when target_type is `user` and the account still exists. */
+  target_email?: string | null;
   category: string;
   context: Record<string, unknown> | null;
   occurred_at: string;
@@ -157,9 +159,17 @@ export class AuditEventsService {
     }
     const search = input.search?.trim();
     if (search) {
-      qb.leftJoin(User, 'actor', 'actor.id = a.actor_id');
+      // Subquery (not leftJoin) — joining User + getManyAndCount + orderBy
+      // trips a TypeORM bug (`databaseName` of undefined) and 500s the API.
       qb.andWhere(
-        '(a.action LIKE :s OR a.target_type LIKE :s OR a.target_id LIKE :s OR a.category LIKE :s OR actor.display_name LIKE :s OR actor.email LIKE :s)',
+        `(a.action LIKE :s
+          OR a.target_type LIKE :s
+          OR a.target_id LIKE :s
+          OR a.category LIKE :s
+          OR a.actor_id IN (
+            SELECT u.id FROM users u
+            WHERE u.display_name LIKE :s OR u.email LIKE :s
+          ))`,
         { s: `%${search}%` },
       );
     }
@@ -196,14 +206,24 @@ export class AuditEventsService {
     rows: AuditEvent[],
   ): Promise<SerializedAuditEvent[]> {
     const actorIds = [...new Set(rows.map((row) => row.actorId))];
-    const actors =
-      actorIds.length === 0
+    const targetUserIds = [
+      ...new Set(
+        rows
+          .filter((row) => row.targetType === 'user')
+          .map((row) => row.targetId),
+      ),
+    ];
+    const userIds = [...new Set([...actorIds, ...targetUserIds])];
+    const users =
+      userIds.length === 0
         ? []
-        : await this.users.find({ where: { id: In(actorIds) } });
-    const actorById = new Map(actors.map((user) => [user.id, user]));
+        : await this.users.find({ where: { id: In(userIds) } });
+    const userById = new Map(users.map((user) => [user.id, user]));
 
     return rows.map((row) => {
-      const actor = actorById.get(row.actorId);
+      const actor = userById.get(row.actorId);
+      const targetUser =
+        row.targetType === 'user' ? userById.get(row.targetId) : undefined;
       return {
         id: row.id,
         actor: {
@@ -213,6 +233,7 @@ export class AuditEventsService {
         action: row.action,
         target_id: row.targetId,
         target_type: row.targetType,
+        target_email: targetUser?.email ?? null,
         category: specCategory(row.category),
         context: row.context,
         occurred_at: toIso(row.occurredAt),
