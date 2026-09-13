@@ -33,6 +33,7 @@ export interface ContentSubmission {
   submitted: string;
   risk: AiRisk;
   status: SubmissionStatus;
+  summary?: string;
   body: string;
   approvedCount: number;
   approvalRate: string;
@@ -105,6 +106,7 @@ export class ReviewQueueService {
         submitted: s.createdAt.toISOString(),
         risk: deriveRisk(s.riskSignal),
         status: submissionStatusFor(s.status),
+        summary: s.summary ?? '',
         body: s.body,
         approvedCount: approved,
         approvalRate: approvalRateFor(approved, decided),

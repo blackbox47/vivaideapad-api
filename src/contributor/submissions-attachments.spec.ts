@@ -97,6 +97,17 @@ describe('Multiple Document Submissions Schema & Normalization', () => {
       expect(parsed.attachments).toHaveLength(1);
       expect(parsed.attachments?.[0].name).toBe('file.pdf');
     });
+
+    it('accepts an optional summary', () => {
+      const parsed = CreateSubmissionSchema.parse({
+        concept_id: validConceptId,
+        title: 'Idea with summary',
+        summary: 'A short pitch for reviewers.',
+        body: 'Detailed body content...',
+      });
+
+      expect(parsed.summary).toBe('A short pitch for reviewers.');
+    });
   });
 
   describe('UpdateSubmissionSchema validation', () => {

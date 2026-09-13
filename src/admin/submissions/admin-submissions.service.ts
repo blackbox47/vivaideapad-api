@@ -25,6 +25,7 @@ export interface SerializedAdminSubmission {
   user_id: string;
   concept_id: string;
   title: string;
+  summary: string | null;
   body: string;
   attachments: Record<string, unknown>[] | Record<string, unknown> | null;
   status: SubmissionStatus;
@@ -60,7 +61,6 @@ export interface SerializedAdminSubmissionDetail extends SerializedAdminSubmissi
   } | null;
   topic?: string;
   topic_title?: string;
-  summary?: string;
   approved_count?: number;
   approval_rate?: string;
 }
@@ -70,6 +70,7 @@ const toSerialized = (s: Submission): SerializedAdminSubmission => ({
   user_id: s.userId,
   concept_id: s.conceptId,
   title: s.title,
+  summary: s.summary,
   body: s.body,
   attachments: s.attachments,
   status: s.status,
@@ -163,10 +164,12 @@ export class AdminSubmissionsService {
     const contributorName = user?.displayName ?? user?.email ?? found.userId;
     const topicTitle = concept?.title ?? 'Untitled concept';
 
-    let summary = '';
+    let summary = found.summary?.trim() ?? '';
     if (
+      !summary &&
       found.attachments &&
       typeof found.attachments === 'object' &&
+      !Array.isArray(found.attachments) &&
       'summary' in found.attachments
     ) {
       summary = String(

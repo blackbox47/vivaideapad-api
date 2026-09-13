@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../common/exceptions/api-exception';
+import { NotificationsService } from '../admin/notifications/notifications.service';
+import { User, USER_ROLES } from '../users/entities/user.entity';
 import { Submission, SubmissionStatus } from './entities/submission.entity';
 import { Concept } from '../admin/concepts/concept.entity';
 import {
@@ -21,6 +23,7 @@ export interface SerializedSubmission {
     title: string;
   } | null;
   title: string;
+  summary: string | null;
   body: string;
   attachments: Record<string, unknown>[] | Record<string, unknown> | null;
   status: SubmissionStatus;
@@ -50,6 +53,7 @@ const toSerialized = (
       }
     : null,
   title: s.title,
+  summary: s.summary,
   body: s.body,
   attachments: s.attachments,
   status: s.status,
@@ -64,6 +68,11 @@ const toSerialized = (
   updated_at: s.updatedAt,
 });
 
+function normalizeSummary(value?: string): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 @Injectable()
 export class SubmissionsService {
   constructor(
@@ -72,6 +81,9 @@ export class SubmissionsService {
     private readonly repo: Repository<Submission>,
     @InjectRepository(Concept)
     private readonly conceptRepo: Repository<Concept>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async list(input: {
@@ -141,6 +153,7 @@ export class SubmissionsService {
       userId,
       conceptId: input.concept_id,
       title: input.title,
+      summary: normalizeSummary(input.summary),
       body: input.body,
       attachments: attachments.length > 0 ? attachments : null,
       status: 'draft',
@@ -169,6 +182,7 @@ export class SubmissionsService {
     }
     if (patch.concept_id !== undefined) found.conceptId = patch.concept_id;
     if (patch.title !== undefined) found.title = patch.title;
+    if (patch.summary !== undefined) found.summary = normalizeSummary(patch.summary);
     if (patch.body !== undefined) found.body = patch.body;
     if (patch.attachments !== undefined) {
       const attachments = normalizeAttachments(patch.attachments);
@@ -197,7 +211,58 @@ export class SubmissionsService {
     const concept = saved.conceptId
       ? await this.conceptRepo.findOne({ where: { id: saved.conceptId } })
       : null;
+
+    // Notify all active admins about the new submission.
+    void this.notifyAdminsOfSubmission(saved, concept?.title ?? null);
+
     return toSerialized(saved, concept?.title);
+  }
+
+  /**
+   * Send a `submission_submitted` notification to every active admin
+   * and superadmin. Fire-and-forget — submission success does not depend
+   * on notification delivery.
+   */
+  private async notifyAdminsOfSubmission(
+    submission: Submission,
+    conceptTitle: string | null,
+  ): Promise<void> {
+    try {
+      const admins = await this.userRepo.find({
+        where: {
+          role: In([USER_ROLES.ADMINISTRATOR, USER_ROLES.SUPERADMIN]),
+          deletedAt: IsNull(),
+        },
+        select: ['id'],
+      });
+
+      const title = `New idea submitted: ${submission.title}`;
+      const body = submission.summary
+        ? submission.summary.slice(0, 200)
+        : conceptTitle
+          ? `A new submission for "${conceptTitle}" is ready for review.`
+          : 'A new submission is ready for review.';
+
+      await Promise.all(
+        admins.map((admin) =>
+          this.notificationsService.emitStandalone({
+            recipientId: admin.id,
+            type: 'submission_submitted',
+            title,
+            body,
+            linkedRecordType: 'submission',
+            linkedRecordId: submission.id,
+            payload: {
+              submission_id: submission.id,
+              concept_id: submission.conceptId,
+              contributor_id: submission.userId,
+            },
+          }),
+        ),
+      );
+    } catch {
+      // Notification failure should never block the submission flow.
+    }
   }
 
   async softDelete(id: string, userId: string): Promise<void> {
