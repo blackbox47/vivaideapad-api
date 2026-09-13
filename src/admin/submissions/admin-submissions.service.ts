@@ -114,6 +114,7 @@ export class AdminSubmissionsService {
     if (input.concept_id)
       qb.andWhere('s.concept_id = :cid', { cid: input.concept_id });
     qb.orderBy('s.created_at', 'DESC')
+      .addOrderBy('s.updated_at', 'DESC')
       .skip((input.page - 1) * input.limit)
       .take(input.limit);
     const [rows, total] = await qb.getManyAndCount();

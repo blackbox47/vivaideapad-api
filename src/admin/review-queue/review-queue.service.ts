@@ -74,7 +74,8 @@ export class ReviewQueueService {
   async queue(): Promise<ReviewQueueResponse> {
     const rows = await this.submissions.find({
       where: { deletedAt: IsNull(), status: Not('draft') },
-      order: { createdAt: 'DESC' },
+      // Newest submissions first (then most recently updated as a tiebreaker).
+      order: { createdAt: 'DESC', updatedAt: 'DESC' },
       take: 200,
     });
     if (rows.length === 0) return { submissions: [] };
@@ -116,6 +117,12 @@ export class ReviewQueueService {
           : null,
       };
     });
+
+    // Keep newest-first even if the driver returns an unstable order.
+    submissions.sort(
+      (a, b) =>
+        new Date(b.submitted).getTime() - new Date(a.submitted).getTime(),
+    );
 
     return { submissions };
   }
