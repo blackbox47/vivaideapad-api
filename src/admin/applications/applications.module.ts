@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../../users/entities/user.entity';
 import { UsersModule } from '../../users/users.module';
 import { AuditEventsModule } from '../audit-events/audit-events.module';
+import { Category } from '../categories/category.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { Application } from './application.entity';
 import { ApplicationsService } from './applications.service';
@@ -12,7 +13,7 @@ import { PublicApplicationsController } from '../../public/applications.controll
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Application, User]),
+    TypeOrmModule.forFeature([Application, User, Category]),
     UsersModule,
     AuditEventsModule,
     NotificationsModule,

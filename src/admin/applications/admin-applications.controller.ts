@@ -30,6 +30,8 @@ import {
   ApplicationDecisionDto,
   ApplicationIdParamDto,
   ApplicationListQueryDto,
+  LegacyApplicationDecisionByIdDto,
+  LegacyApplicationDecisionDto,
 } from './dto/applications.dto';
 import { USER_ROLES } from '../../users/entities/user.entity';
 
@@ -44,7 +46,7 @@ export class AdminApplicationsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Decide an application (legacy PATCH format)' })
   async patchDecide(
-    @Body() body: { id: string; status: string; comment?: string },
+    @Body() body: LegacyApplicationDecisionDto,
     @CurrentUser() actor: { id: string },
   ) {
     let decision: 'approve_invite' | 'reject' | 'request_more_info' =
@@ -76,7 +78,7 @@ export class AdminApplicationsController {
   })
   async patchDecideById(
     @Param() params: ApplicationIdParamDto,
-    @Body() body: { status: string; comment?: string },
+    @Body() body: LegacyApplicationDecisionByIdDto,
     @CurrentUser() actor: { id: string },
   ) {
     let decision: 'approve_invite' | 'reject' | 'request_more_info' =

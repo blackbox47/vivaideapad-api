@@ -35,6 +35,9 @@ export interface ApplicantView {
   body: string;
   submitted: string;
   status: ApplicantStatus;
+  source: string;
+  consent: boolean;
+  decisionNotes: string | null;
 }
 
 export type ApplicantStatus =
@@ -111,6 +114,9 @@ export class PeopleService {
         body: a.ideaDescription,
         submitted: a.createdAt.toISOString(),
         status: applicantStatusFor(a.status),
+        source: 'Website signup',
+        consent: !!a.consent,
+        decisionNotes: a.decisionNotes,
       };
     });
   }

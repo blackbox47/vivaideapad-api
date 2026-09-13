@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Notification } from '../notifications/notification.entity';
 import { UsersService } from '../../users/users.service';
 import { User, USER_ROLES } from '../../users/entities/user.entity';
+import { Category } from '../categories/category.entity';
 import { Application, ApplicationStatus } from './application.entity';
 import type {
   PublicCreateApplicationDto,
@@ -32,6 +33,20 @@ export interface SerializedApplication {
   updated_at: Date;
 }
 
+export interface SerializedApplicationDetail extends SerializedApplication {
+  name: string;
+  email: string;
+  topic: string;
+  title: string;
+  body: string;
+  submitted: string;
+  source: string;
+  user?: { id: string; name: string; email: string };
+  category?: { id: string; name: string };
+}
+
+const APPLICATION_SOURCE_WEBSITE = 'Website signup';
+
 const toSerialized = (a: Application): SerializedApplication => ({
   id: a.id,
   user_id: a.userId,
@@ -49,6 +64,29 @@ const toSerialized = (a: Application): SerializedApplication => ({
   updated_at: a.updatedAt,
 });
 
+function toDetail(
+  a: Application,
+  user: User | null,
+  category: Category | null,
+): SerializedApplicationDetail {
+  const name = user?.displayName ?? user?.email ?? a.userId;
+  const email = user?.email ?? '';
+  return {
+    ...toSerialized(a),
+    name,
+    email,
+    topic: category?.name ?? 'Uncategorized',
+    title: a.ideaTitle,
+    body: a.ideaDescription,
+    submitted: a.createdAt.toISOString(),
+    source: APPLICATION_SOURCE_WEBSITE,
+    user: user ? { id: user.id, name, email } : undefined,
+    category: category
+      ? { id: category.id, name: category.name }
+      : undefined,
+  };
+}
+
 @Injectable()
 export class ApplicationsService {
   constructor(
@@ -57,6 +95,8 @@ export class ApplicationsService {
     private readonly repo: Repository<Application>,
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(Category)
+    private readonly categories: Repository<Category>,
     private readonly usersService: UsersService,
     private readonly audit: AuditEventsService,
     private readonly notify: NotificationsService,
@@ -148,12 +188,18 @@ export class ApplicationsService {
     return { data: rows.map(toSerialized), total };
   }
 
-  async findOne(id: string): Promise<SerializedApplication> {
+  async findOne(id: string): Promise<SerializedApplicationDetail> {
     const found = await this.repo.findOne({
       where: { id, deletedAt: IsNull() },
     });
     if (!found) throw ApiException.notFound('Application');
-    return toSerialized(found);
+
+    const [user, category] = await Promise.all([
+      this.users.findOne({ where: { id: found.userId } }),
+      this.categories.findOne({ where: { id: found.categoryId } }),
+    ]);
+
+    return toDetail(found, user, category);
   }
 
   async decide(input: {
@@ -266,3 +312,5 @@ function randomTokenSegment(length = 4): string {
   }
   return out;
 }
+
+export const __testing = { toDetail, toSerialized };
