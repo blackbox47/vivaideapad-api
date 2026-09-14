@@ -15,8 +15,16 @@ describe('Multiple Document Submissions Schema & Normalization', () => {
 
     it('parses JSON string of array of documents', () => {
       const jsonStr = JSON.stringify([
-        { name: 'doc1.pdf', url: 'https://cdn.example.com/doc1.pdf', size: 1000 },
-        { name: 'doc2.png', url: 'https://cdn.example.com/doc2.png', size: 2000 },
+        {
+          name: 'doc1.pdf',
+          url: 'https://cdn.example.com/doc1.pdf',
+          size: 1000,
+        },
+        {
+          name: 'doc2.png',
+          url: 'https://cdn.example.com/doc2.png',
+          size: 2000,
+        },
       ]);
       const result = normalizeAttachments(jsonStr);
       expect(result).toHaveLength(2);
@@ -34,7 +42,11 @@ describe('Multiple Document Submissions Schema & Normalization', () => {
     it('normalizes array containing string URLs and objects', () => {
       const input = [
         'https://cdn.example.com/file1.pdf',
-        { name: 'file2.docx', url: 'https://cdn.example.com/file2.docx', size: 5000 },
+        {
+          name: 'file2.docx',
+          url: 'https://cdn.example.com/file2.docx',
+          size: 5000,
+        },
       ];
       const result = normalizeAttachments(input);
       expect(result).toHaveLength(2);

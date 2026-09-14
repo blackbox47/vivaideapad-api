@@ -26,10 +26,7 @@ export class PublicLeaderboardController {
   @ApiOkResponse({ description: 'Public top leaderboard entries' })
   async getLeaderboard(@Query() query: PublicLeaderboardQueryDto) {
     const period = query.period ?? 'all_time';
-    const data = await this.leaderboard.findPublicTop(
-      query.limit ?? 5,
-      period,
-    );
+    const data = await this.leaderboard.findPublicTop(query.limit ?? 5, period);
     return { period, data };
   }
 }

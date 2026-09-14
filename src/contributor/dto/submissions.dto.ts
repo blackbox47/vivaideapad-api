@@ -46,9 +46,8 @@ export function normalizeAttachments(raw: unknown): Record<string, unknown>[] {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
-        return parsed.filter(
-          (item): item is Record<string, unknown> =>
-            Boolean(item && typeof item === 'object'),
+        return parsed.filter((item): item is Record<string, unknown> =>
+          Boolean(item && typeof item === 'object'),
         );
       }
       if (parsed && typeof parsed === 'object') {

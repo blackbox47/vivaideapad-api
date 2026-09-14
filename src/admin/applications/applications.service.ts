@@ -124,7 +124,11 @@ function toDetail(
     risk: deriveApplicationRisk(`${a.ideaTitle} ${a.ideaDescription}`),
     user: user ? { id: user.id, name, email } : undefined,
     category: category
-      ? { id: category.id, name: category.name, description: category.description }
+      ? {
+          id: category.id,
+          name: category.name,
+          description: category.description,
+        }
       : undefined,
     concept: concept
       ? {

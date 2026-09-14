@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddSubmissionSubmittedNotificationType1700000000012
-  implements MigrationInterface
-{
+export class AddSubmissionSubmittedNotificationType1700000000012 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE \`notifications\`

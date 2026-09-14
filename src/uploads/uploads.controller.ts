@@ -157,12 +157,17 @@ export class UploadsController {
     const ext = extname(abs).toLowerCase();
     const contentType = MIME_BY_EXT[ext] ?? 'application/octet-stream';
     const wantsDownload =
-      downloadFlag === '1' || downloadFlag === 'true' || downloadFlag === 'download';
+      downloadFlag === '1' ||
+      downloadFlag === 'true' ||
+      downloadFlag === 'download';
     const downloadName = filename?.trim() || basename(abs);
     res.setHeader('Content-Type', contentType);
     res.setHeader(
       'Content-Disposition',
-      buildContentDisposition(wantsDownload ? 'attachment' : 'inline', downloadName),
+      buildContentDisposition(
+        wantsDownload ? 'attachment' : 'inline',
+        downloadName,
+      ),
     );
     createReadStream(abs).pipe(res);
   }

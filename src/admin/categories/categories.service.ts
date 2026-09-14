@@ -131,7 +131,10 @@ export class CategoriesService {
         withDeleted: true,
       });
       if (existing && !existing.deletedAt) {
-        throw ApiException.conflict('slug_taken', 'Category slug already exists');
+        throw ApiException.conflict(
+          'slug_taken',
+          'Category slug already exists',
+        );
       }
     }
 

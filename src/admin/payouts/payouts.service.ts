@@ -9,7 +9,11 @@ import { Notification } from '../notifications/notification.entity';
 import { WalletService } from '../../contributor/wallet.service';
 import { PayoutRequest, PayoutStatus } from './payout.entity';
 import { LedgerEntry } from '../../contributor/entities/ledger-entry.entity';
-import { CreatePayoutDto, MIN_PAYOUT_AMOUNT, ProcessPayoutDto } from './dto/payouts.dto';
+import {
+  CreatePayoutDto,
+  MIN_PAYOUT_AMOUNT,
+  ProcessPayoutDto,
+} from './dto/payouts.dto';
 import { User } from '../../users/entities/user.entity';
 
 export interface SerializedPayout {

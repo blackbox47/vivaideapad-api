@@ -31,7 +31,11 @@ describe('toDetail', () => {
       name: 'Network & Coverage',
     };
 
-    const detail = toDetail(application as never, user as never, category as never);
+    const detail = toDetail(
+      application as never,
+      user as never,
+      category as never,
+    );
 
     expect(detail.name).toBe('Rafiqul Islam');
     expect(detail.email).toBe('rafiqul.islam@example.com');
@@ -50,7 +54,8 @@ describe('toDetail', () => {
       id: 'concept-1',
       categoryId: 'cat-1',
       title: 'Recharge reminder that feels personal',
-      brief: 'Design a recharge nudge that feels helpful — not spammy — for prepaid users.',
+      brief:
+        'Design a recharge nudge that feels helpful — not spammy — for prepaid users.',
       rewardBudget: '25000.00',
       status: 'active',
       closeDate: new Date('2026-10-25T00:00:00.000Z'),
@@ -59,7 +64,11 @@ describe('toDetail', () => {
 
     const detail = toDetail(
       application as never,
-      { id: 'user-1', displayName: 'Rafiqul Islam', email: 'rafiqul.islam@example.com' } as never,
+      {
+        id: 'user-1',
+        displayName: 'Rafiqul Islam',
+        email: 'rafiqul.islam@example.com',
+      } as never,
       { id: 'cat-1', name: 'Network & Coverage' } as never,
       concept as never,
     );
@@ -68,7 +77,9 @@ describe('toDetail', () => {
     expect(detail.concept?.title).toBe('Recharge reminder that feels personal');
     expect(detail.concept?.brief).toContain('recharge nudge');
     expect(detail.concept?.reward_budget).toBe('25000.00');
-    expect(detail.concept?.close_date).toEqual(new Date('2026-10-25T00:00:00.000Z'));
+    expect(detail.concept?.close_date).toEqual(
+      new Date('2026-10-25T00:00:00.000Z'),
+    );
   });
 
   it('falls back when user or category is missing', () => {

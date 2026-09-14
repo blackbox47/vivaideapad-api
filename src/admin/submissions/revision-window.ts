@@ -7,10 +7,9 @@ export const DEFAULT_REVISION_WINDOW_DAYS: RevisionWindowDays = 7;
 export const RevisionWindowDaysSchema = z.coerce
   .number()
   .int()
-  .refine(
-    (n): n is RevisionWindowDays => n === 3 || n === 7 || n === 14,
-    { message: 'revision_window_days must be 3, 7, or 14' },
-  );
+  .refine((n): n is RevisionWindowDays => n === 3 || n === 7 || n === 14, {
+    message: 'revision_window_days must be 3, 7, or 14',
+  });
 
 export function isRevisionWindowDays(n: number): n is RevisionWindowDays {
   return n === 3 || n === 7 || n === 14;
