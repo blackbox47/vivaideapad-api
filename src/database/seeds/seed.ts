@@ -299,8 +299,8 @@ async function seed(): Promise<void> {
     for (const c of CATEGORIES) {
       let row = await categoryRepo.findOne({
         where: { slug: c.slug },
-        withDeleted: true,
-      });
+      withDeleted: true,
+    });
       if (!row) {
         row = categoryRepo.create({
           slug: c.slug,
@@ -473,7 +473,7 @@ async function seed(): Promise<void> {
         row.closeDate = def.closeDate;
         row.metadata = def.metadata;
         row.deletedAt = null;
-        await conceptRepo.save(row);
+      await conceptRepo.save(row);
         console.log(`  ↻ concept "${def.title}"`);
       }
       concepts.set(def.key, row);
@@ -1171,7 +1171,7 @@ async function seed(): Promise<void> {
           }),
         );
         console.log(`  ✓ audit ${def.action}`);
-      } else {
+    } else {
         console.log(`  ↻ audit ${def.action}`);
       }
     }
