@@ -132,7 +132,10 @@ export class AdminSubmissionsService {
         ? this.userRepo.findOne({ where: { id: found.userId } })
         : null,
       found.conceptId
-        ? this.conceptRepo.findOne({ where: { id: found.conceptId } })
+        ? this.conceptRepo.findOne({
+            where: { id: found.conceptId },
+            withDeleted: true,
+          })
         : null,
     ]);
 
@@ -261,11 +264,20 @@ export class AdminSubmissionsService {
           if (!effectiveReward || effectiveReward <= 0) {
             const conceptRepo = manager.getRepository(Concept);
             const concept = await conceptRepo.findOne({
-              where: { id: found.conceptId, deletedAt: IsNull() },
+              where: { id: found.conceptId },
+              withDeleted: true,
             });
             const conceptBudget = concept ? Number(concept.rewardBudget) : 0;
             if (conceptBudget > 0) {
               effectiveReward = conceptBudget;
+            }
+          }
+          if (!effectiveReward || effectiveReward <= 0) {
+            const existingReward = found.rewardAmount
+              ? Number(found.rewardAmount)
+              : 0;
+            if (existingReward > 0) {
+              effectiveReward = existingReward;
             }
           }
           if (!effectiveReward || effectiveReward <= 0) {

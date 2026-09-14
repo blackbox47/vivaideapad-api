@@ -120,6 +120,7 @@ export class SubmissionsService {
       conceptIds.length > 0
         ? await this.conceptRepo.find({
             where: conceptIds.map((id) => ({ id })),
+            withDeleted: true,
           })
         : [];
     const conceptById = new Map(conceptRows.map((c) => [c.id, c.title]));
@@ -139,7 +140,10 @@ export class SubmissionsService {
     });
     if (!found) throw ApiException.notFound('Submission');
     const concept = found.conceptId
-      ? await this.conceptRepo.findOne({ where: { id: found.conceptId } })
+      ? await this.conceptRepo.findOne({
+          where: { id: found.conceptId },
+          withDeleted: true,
+        })
       : null;
     return toSerialized(found, concept?.title);
   }
