@@ -141,7 +141,8 @@ const CATEGORIES = [
   {
     slug: 'general',
     name: 'General',
-    description: 'Open-ended idea bucket — anything that does not fit elsewhere.',
+    description:
+      'Open-ended idea bucket — anything that does not fit elsewhere.',
     color: '#5b8def',
     sortOrder: 0,
     isActive: 'active' as const,
@@ -298,8 +299,8 @@ async function seed(): Promise<void> {
     for (const c of CATEGORIES) {
       let row = await categoryRepo.findOne({
         where: { slug: c.slug },
-      withDeleted: true,
-    });
+        withDeleted: true,
+      });
       if (!row) {
         row = categoryRepo.create({
           slug: c.slug,
@@ -472,7 +473,7 @@ async function seed(): Promise<void> {
         row.closeDate = def.closeDate;
         row.metadata = def.metadata;
         row.deletedAt = null;
-      await conceptRepo.save(row);
+        await conceptRepo.save(row);
         console.log(`  ↻ concept "${def.title}"`);
       }
       concepts.set(def.key, row);
@@ -928,12 +929,36 @@ async function seed(): Promise<void> {
 
     console.log('Leaderboard');
     const leaderboardDefs = [
-      { user: tanvir, score: '8500.00', approvals: 1, submissions: 3, streak: 2 },
+      {
+        user: tanvir,
+        score: '8500.00',
+        approvals: 1,
+        submissions: 3,
+        streak: 2,
+      },
       { user: arif, score: '5000.00', approvals: 1, submissions: 4, streak: 3 },
-      { user: karim, score: '4500.00', approvals: 1, submissions: 3, streak: 1 },
-      { user: contrib1, score: '1000.00', approvals: 1, submissions: 2, streak: 1 },
+      {
+        user: karim,
+        score: '4500.00',
+        approvals: 1,
+        submissions: 3,
+        streak: 1,
+      },
+      {
+        user: contrib1,
+        score: '1000.00',
+        approvals: 1,
+        submissions: 2,
+        streak: 1,
+      },
       { user: rafiqul, score: '0.00', approvals: 0, submissions: 2, streak: 0 },
-      { user: contrib2, score: '0.00', approvals: 0, submissions: 1, streak: 0 },
+      {
+        user: contrib2,
+        score: '0.00',
+        approvals: 0,
+        submissions: 1,
+        streak: 0,
+      },
     ];
     for (const def of leaderboardDefs) {
       let row = await leaderboardRepo.findOne({
@@ -1146,14 +1171,16 @@ async function seed(): Promise<void> {
           }),
         );
         console.log(`  ✓ audit ${def.action}`);
-    } else {
+      } else {
         console.log(`  ↻ audit ${def.action}`);
       }
     }
 
     console.log('\nSeed complete.');
     console.log(`Password for all users: ${DEFAULT_PASSWORD}`);
-    console.log('Try: admin@viva.local · contrib1@viva.local · arif.chowdhury@example.com');
+    console.log(
+      'Try: admin@viva.local · contrib1@viva.local · arif.chowdhury@example.com',
+    );
   } finally {
     await AppDataSource.destroy();
   }

@@ -182,7 +182,8 @@ export class SubmissionsService {
     }
     if (patch.concept_id !== undefined) found.conceptId = patch.concept_id;
     if (patch.title !== undefined) found.title = patch.title;
-    if (patch.summary !== undefined) found.summary = normalizeSummary(patch.summary);
+    if (patch.summary !== undefined)
+      found.summary = normalizeSummary(patch.summary);
     if (patch.body !== undefined) found.body = patch.body;
     if (patch.attachments !== undefined) {
       const attachments = normalizeAttachments(patch.attachments);

@@ -4,7 +4,10 @@ import { DataSource, In, Like, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
 import { AuditEventsService } from '../audit-events/audit-events.service';
-import { LedgerEntry, type LedgerListFilterType } from '../../contributor/entities/ledger-entry.entity';
+import {
+  LedgerEntry,
+  type LedgerListFilterType,
+} from '../../contributor/entities/ledger-entry.entity';
 import { User } from '../../users/entities/user.entity';
 import { ManualAdjustmentDto } from './dto/ledger-admin.dto';
 

@@ -510,8 +510,7 @@ export class ContributorController {
 
       return {
         id: l.id,
-        description:
-          (l.metadata?.description as string) ?? descriptionFallback,
+        description: (l.metadata?.description as string) ?? descriptionFallback,
         date: (l.postedAt
           ? l.postedAt.toISOString()
           : l.createdAt.toISOString()

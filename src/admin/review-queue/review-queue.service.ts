@@ -112,9 +112,7 @@ export class ReviewQueueService {
         approvedCount: approved,
         approvalRate: approvalRateFor(approved, decided),
         revisionWindowDays: s.revisionWindowDays,
-        revisionDueAt: s.revisionDueAt
-          ? s.revisionDueAt.toISOString()
-          : null,
+        revisionDueAt: s.revisionDueAt ? s.revisionDueAt.toISOString() : null,
       };
     });
 

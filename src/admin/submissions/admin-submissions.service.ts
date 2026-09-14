@@ -173,9 +173,7 @@ export class AdminSubmissionsService {
       !Array.isArray(found.attachments) &&
       'summary' in found.attachments
     ) {
-      summary = String(
-        (found.attachments as Record<string, unknown>).summary ?? '',
-      );
+      summary = String(found.attachments.summary ?? '');
     }
     let body = found.body;
     let attachments = found.attachments;
@@ -197,7 +195,7 @@ export class AdminSubmissionsService {
           type: 'Spreadsheet',
           url: '#',
         },
-      ] as unknown as Record<string, unknown>;
+      ];
     }
 
     return {

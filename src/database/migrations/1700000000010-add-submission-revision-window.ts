@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddSubmissionRevisionWindow1700000000010
-  implements MigrationInterface
-{
+export class AddSubmissionRevisionWindow1700000000010 implements MigrationInterface {
   name = 'AddSubmissionRevisionWindow1700000000010';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
