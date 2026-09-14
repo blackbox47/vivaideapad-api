@@ -82,3 +82,11 @@ export const BulkConceptActionSchema = z.object({
 export class BulkConceptActionDto extends createZodDto(
   BulkConceptActionSchema,
 ) {}
+
+export const CascadePreviewSchema = z.object({
+  ids: z
+    .array(z.uuid({ message: 'Each id must be a UUID' }))
+    .min(1, 'At least one id is required'),
+});
+export class CascadePreviewDto extends createZodDto(CascadePreviewSchema) {}
+
