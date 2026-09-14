@@ -25,7 +25,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         // `pnpm migration:run`.
         synchronize: config.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         charset: 'utf8mb4',
-        timezone: '+06:00',
+        // MySQL `DATETIME` columns are zone-less: values are stored verbatim
+        // and mysql2's connection `timezone` controls *only* how the JS Date is
+        // serialized on the wire and parsed on read. Using 'Z' (UTC) means the
+        // column stores the UTC instant's hour/minute digits, and a read with
+        // 'Z' reconstructs the same UTC instant — no double shift. The browser
+        // (or any client) renders the resulting ISO string in the user's zone.
+        timezone: process.env.DB_TIMEZONE ?? 'Z',
         logging: ['error', 'warn'] as const,
       }),
     }),
