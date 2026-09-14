@@ -9,11 +9,12 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiCreatedResponse,
-  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -28,6 +29,7 @@ import {
 import { ConceptsService } from './concepts.service';
 import {
   BulkConceptActionDto,
+  CascadePreviewDto,
   ConceptIdParamDto,
   ConceptListQueryDto,
   CreateConceptDto,
@@ -68,8 +70,19 @@ export class AdminConceptsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Perform bulk action on concepts' })
   @ApiOkResponse({ description: 'Bulk action result' })
-  async bulkAction(@Body() body: BulkConceptActionDto) {
-    return this.concepts.bulkAction(body);
+  async bulkAction(@Body() body: BulkConceptActionDto, @Req() req: Request) {
+    const actor = req.user as { sub: string };
+    return this.concepts.bulkAction(body, actor.sub);
+  }
+
+  @Post('cascade-preview')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Preview cascaded pending submissions for concepts to be deleted',
+  })
+  @ApiOkResponse({ description: 'Cascade preview count' })
+  async cascadePreview(@Body() body: CascadePreviewDto) {
+    return this.concepts.previewCascade(body.ids);
   }
 
   @Get(':id')
@@ -104,10 +117,21 @@ export class AdminConceptsController {
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Soft-delete a concept' })
-  @ApiNoContentResponse({ description: 'Concept deleted' })
-  async remove(@Param() params: ConceptIdParamDto): Promise<void> {
-    await this.concepts.softDelete(params.id);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Soft-delete a concept; cascades to any pending_review submissions',
+  })
+  @ApiOkResponse({ description: 'Concept deleted with cascade summary' })
+  async remove(
+    @Param() params: ConceptIdParamDto,
+    @Req() req: Request,
+  ): Promise<{
+    id: string;
+    cascaded_submissions: number;
+    cascaded_submission_ids: string[];
+  }> {
+    const actor = req.user as { sub: string };
+    return this.concepts.softDelete({ id: params.id, actorId: actor.sub });
   }
 }

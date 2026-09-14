@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
 import { Concept, ConceptStatus } from './concept.entity';
-import { Submission } from '../../contributor/entities/submission.entity';
+import {
+  Submission,
+  SubmissionStatus,
+} from '../../contributor/entities/submission.entity';
+import { AuditEventsService } from '../audit-events/audit-events.service';
 import type {
   CreateConceptDto,
   UpdateConceptDto,
@@ -26,6 +30,19 @@ export interface SerializedConcept {
   updated_at: Date;
 }
 
+export interface ConceptDeleteResult {
+  id: string;
+  cascaded_submissions: number;
+  cascaded_submission_ids: string[];
+}
+
+export interface BulkConceptDeleteResult {
+  success: boolean;
+  affected: number;
+  cascaded_submissions: number;
+  cascaded_submission_ids: string[];
+}
+
 const toSerialized = (c: Concept): SerializedConcept => ({
   id: c.id,
   category_id: c.categoryId,
@@ -41,13 +58,18 @@ const toSerialized = (c: Concept): SerializedConcept => ({
   updated_at: c.updatedAt,
 });
 
+/** Statuses that still have review-work attached and should be cascaded when a topic dies. */
+export const CASCADE_STATUSES: SubmissionStatus[] = ['pending_review'];
+
 @Injectable()
 export class ConceptsService {
   constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(Concept)
     private readonly repo: Repository<Concept>,
     @InjectRepository(Submission)
     private readonly submissionsRepo: Repository<Submission>,
+    private readonly audit: AuditEventsService,
   ) {}
 
   async list(input: {
@@ -223,19 +245,97 @@ export class ConceptsService {
     return toSerialized(saved);
   }
 
-  async softDelete(id: string): Promise<void> {
-    const found = await this.repo.findOne({
-      where: { id, deletedAt: IsNull() },
+  /**
+   * Soft-delete a topic and cascade-soft-delete any of its submissions that
+   * are still under review (`pending_review`). Approved/rejected/changes_requested
+   * submissions are preserved for historical record-keeping. Everything happens
+   * inside one transaction so partial failures roll back fully.
+   */
+  async softDelete(input: {
+    id: string;
+    actorId: string;
+  }): Promise<ConceptDeleteResult> {
+    const { id, actorId } = input;
+
+    return this.dataSource.transaction(async (manager) => {
+      const conceptRepo = manager.getRepository(Concept);
+      const submissionRepo = manager.getRepository(Submission);
+
+      const found = await conceptRepo.findOne({
+        where: { id, deletedAt: IsNull() },
+      });
+      if (!found) throw ApiException.notFound('Concept');
+
+      const cascaded = await submissionRepo.find({
+        where: {
+          conceptId: id,
+          status: In(CASCADE_STATUSES),
+          deletedAt: IsNull(),
+        },
+      });
+
+      await conceptRepo.softRemove(found);
+      const cascadedIds: string[] = [];
+      if (cascaded.length > 0) {
+        await submissionRepo.softRemove(cascaded);
+        for (const row of cascaded) cascadedIds.push(row.id);
+      }
+
+      await this.audit.record(manager, {
+        actorId,
+        action: 'concept.delete',
+        targetType: 'concept',
+        targetId: id,
+        category: 'concepts',
+        context: {
+          cascaded_submission_ids: cascadedIds,
+          cascaded_submission_count: cascadedIds.length,
+          cascading_statuses: CASCADE_STATUSES,
+        },
+      });
+
+      return {
+        id,
+        cascaded_submissions: cascadedIds.length,
+        cascaded_submission_ids: cascadedIds,
+      };
     });
-    if (!found) throw ApiException.notFound('Concept');
-    await this.repo.softRemove(found);
   }
 
-  async bulkAction(input: BulkConceptActionDto): Promise<{
-    success: boolean;
-    affected: number;
-    duplicated?: SerializedConcept[];
+  /**
+   * Preview the number of pending_review submissions that will be cascaded
+   * if the given concepts are deleted. Non-destructive and cheap.
+   */
+  async previewCascade(ids: string[]): Promise<{
+    cascaded_submissions: number;
   }> {
+    if (!ids || ids.length === 0) {
+      return { cascaded_submissions: 0 };
+    }
+    const uniqueIds = Array.from(new Set(ids));
+    const count = await this.submissionsRepo.count({
+      where: {
+        conceptId: In(uniqueIds),
+        status: In(CASCADE_STATUSES),
+        deletedAt: IsNull(),
+      },
+    });
+    return { cascaded_submissions: count };
+  }
+
+  async bulkAction(
+    input: BulkConceptActionDto,
+    actorId?: string,
+  ): Promise<
+    | { success: boolean; affected: number; duplicated?: SerializedConcept[] }
+    | BulkConceptDeleteResult
+  > {
+    if (input.action === 'delete' && !actorId) {
+      throw ApiException.validation(
+        'actorId is required for bulk delete cascade',
+      );
+    }
+
     if (!input.ids || input.ids.length === 0) {
       return { success: true, affected: 0 };
     }
@@ -333,12 +433,72 @@ export class ConceptsService {
       }
 
       case 'delete': {
-        await this.repo.softRemove(rows);
-        return { success: true, affected: rows.length };
+        const result = await this.cascadeDeleteMany(rows, actorId as string);
+        return {
+          success: true,
+          affected: rows.length,
+          cascaded_submissions: result.cascaded_submissions,
+          cascaded_submission_ids: result.cascaded_submission_ids,
+        };
       }
 
       default:
         throw ApiException.validation('Unsupported bulk action');
     }
+  }
+
+  /**
+   * Cascade-soft-delete helper for the bulk path. Performs one transaction
+   * that soft-removes every concept in `rows` along with its `pending_review`
+   * submissions. One audit event is emitted per concept so the trail is
+   * searchable per-row.
+   */
+  private async cascadeDeleteMany(
+    rows: Concept[],
+    actorId: string,
+  ): Promise<{
+    cascaded_submissions: number;
+    cascaded_submission_ids: string[];
+  }> {
+    return this.dataSource.transaction(async (manager) => {
+      const conceptRepo = manager.getRepository(Concept);
+      const submissionRepo = manager.getRepository(Submission);
+      const allCascadedIds: string[] = [];
+
+      for (const row of rows) {
+        const cascaded = await submissionRepo.find({
+          where: {
+            conceptId: row.id,
+            status: In(CASCADE_STATUSES),
+            deletedAt: IsNull(),
+          },
+        });
+        if (cascaded.length > 0) {
+          await submissionRepo.softRemove(cascaded);
+          for (const c of cascaded) allCascadedIds.push(c.id);
+        }
+      }
+
+      await conceptRepo.softRemove(rows);
+
+      for (const row of rows) {
+        await this.audit.record(manager, {
+          actorId,
+          action: 'concept.bulk_delete',
+          targetType: 'concept',
+          targetId: row.id,
+          category: 'concepts',
+          context: {
+            cascading_statuses: CASCADE_STATUSES,
+            batch_size: rows.length,
+          },
+        });
+      }
+
+      return {
+        cascaded_submissions: allCascadedIds.length,
+        cascaded_submission_ids: allCascadedIds,
+      };
+    });
   }
 }
