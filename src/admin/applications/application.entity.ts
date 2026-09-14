@@ -20,6 +20,7 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 @Entity('applications')
 @Index('idx_applications_user', ['userId'])
 @Index('idx_applications_category', ['categoryId'])
+@Index('idx_applications_concept', ['conceptId'])
 @Index('idx_applications_status', ['status'])
 export class Application {
   @PrimaryGeneratedColumn('uuid')
@@ -30,6 +31,14 @@ export class Application {
 
   @Column({ type: 'varchar', length: 36, name: 'category_id' })
   categoryId!: string;
+
+  @Column({
+    type: 'varchar',
+    length: 36,
+    nullable: true,
+    name: 'concept_id',
+  })
+  conceptId!: string | null;
 
   @Column({ type: 'varchar', length: 255, name: 'idea_title' })
   ideaTitle!: string;

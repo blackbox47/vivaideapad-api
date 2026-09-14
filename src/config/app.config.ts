@@ -12,6 +12,8 @@ import { registerAs } from '@nestjs/config';
 export interface AppConfigShape {
   port: number;
   nodeEnv: 'development' | 'production' | 'test';
+  /** Public SPA origin used in outbound email links (no trailing slash). */
+  publicUrl: string;
 }
 
 export interface JwtConfigShape {
@@ -50,6 +52,10 @@ export const GOOGLE_CONFIG = 'google';
 export const appConfig = registerAs<AppConfigShape>(APP_CONFIG, () => ({
   port: Number(process.env.PORT ?? 3000),
   nodeEnv: (process.env.NODE_ENV ?? 'development') as AppConfigShape['nodeEnv'],
+  publicUrl: (process.env.APP_PUBLIC_URL ?? 'http://localhost:5173').replace(
+    /\/+$/,
+    '',
+  ),
 }));
 
 export const jwtConfig = registerAs<JwtConfigShape>(JWT_CONFIG, () => ({

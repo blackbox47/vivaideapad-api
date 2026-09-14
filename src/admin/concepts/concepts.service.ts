@@ -79,6 +79,7 @@ export class ConceptsService {
 
   async findPublished(input: {
     category_id?: string;
+    is_onboarding?: boolean;
     page: number;
     limit: number;
   }): Promise<{ data: SerializedConcept[]; total: number }> {
@@ -88,6 +89,11 @@ export class ConceptsService {
       .andWhere('c.status IN (:...st)', { st: ['active', 'published'] });
     if (input.category_id) {
       qb.andWhere('c.category_id = :cid', { cid: input.category_id });
+    }
+    if (input.is_onboarding !== undefined) {
+      qb.andWhere('c.is_onboarding = :onboarding', {
+        onboarding: input.is_onboarding,
+      });
     }
     qb.orderBy('c.open_date', 'DESC')
       .addOrderBy('c.created_at', 'DESC')

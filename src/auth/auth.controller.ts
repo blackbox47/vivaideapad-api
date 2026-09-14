@@ -29,6 +29,10 @@ import { GoogleSignInDto } from './google/dto/google-sign-in.dto';
 import { GoogleAuthService } from './google/google-auth.service';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
 import { PasswordChangeDto } from './dto/password-change.dto';
+import {
+  PasswordForgotDto,
+  PasswordResetDto,
+} from './dto/password-reset.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -253,8 +257,13 @@ export class AuthController {
   @Public()
   @Post('password/forgot')
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Request a password reset (always 202)' })
-  async forgotPassword(@Body() body: { email: string }): Promise<void> {
+  @ApiOperation({
+    summary: 'Request a password reset (always 202)',
+    description:
+      'Always returns 202. If a password-based account exists for the email, ' +
+      'a one-hour reset link is emailed (console mailer logs the URL in local).',
+  })
+  async forgotPassword(@Body() body: PasswordForgotDto): Promise<void> {
     await this.auth.forgotPassword(body.email);
   }
 
@@ -262,9 +271,7 @@ export class AuthController {
   @Post('password/reset')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Consume a password reset token' })
-  async resetPassword(
-    @Body() body: { token: string; new_password: string },
-  ): Promise<void> {
+  async resetPassword(@Body() body: PasswordResetDto): Promise<void> {
     await this.auth.resetPassword(body.token, body.new_password);
   }
 }

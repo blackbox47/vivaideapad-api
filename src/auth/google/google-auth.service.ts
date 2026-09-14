@@ -52,17 +52,25 @@ export class GoogleAuthService {
         'Please use the admin portal to sign in with this account',
       );
     }
-    // Delegate token minting, suspended check, and cookie data creation to AuthService.
-    // `signInForExistingUser` itself rejects `pending_review`, so a freshly
-    // Google-signed-up user lands here too — kept consistent with the
-    // email/password path.
+
+    // New or still-pending Google accounts cannot enter the portal yet.
+    // Re-send the /verify-email link so they can complete the application.
+    if (user.accessStatus === 'pending_review') {
+      await this.issueOnboardingVerificationEmail(user);
+      throw ApiException.forbidden(
+        'account_pending_review',
+        'Your account is awaiting review. We sent a link to your email — open it to submit your idea, then wait for admin approval before signing in.',
+      );
+    }
+
     return this.authService.signInForExistingUser(user, input.ua);
   }
 
   /**
    * Public contributor sign-up via Google. Verifies the ID token, creates
    * the user with `accessStatus = 'pending_review'`, issues a verification
-   * token, and emails the link. **Never** issues JWTs or sets auth cookies.
+   * token, and emails the /verify-email link. **Never** issues JWTs or sets
+   * auth cookies.
    */
   async signUp(input: { credential: string }): Promise<{ email: string }> {
     const { user, created } = await this.verifyAndResolveIdentity(
@@ -85,17 +93,21 @@ export class GoogleAuthService {
       // `pending_review` falls through — re-issue the token + email.
     }
 
+    await this.issueOnboardingVerificationEmail(user);
+
+    return { email: user.email };
+  }
+
+  /** Issue (or refresh) the onboarding verification token and email the SPA link. */
+  private async issueOnboardingVerificationEmail(user: User): Promise<void> {
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
     await this.users.setVerificationToken(user.id, token, expiresAt);
-
     await this.mailer.sendVerificationLink({
       email: user.email,
       displayName: user.displayName,
       token,
     });
-
-    return { email: user.email };
   }
 
   /**

@@ -59,6 +59,36 @@ export class UsersService {
     );
   }
 
+  findByPasswordResetToken(token: string): Promise<User | null> {
+    return this.users.findOne({
+      where: { passwordResetToken: token, deletedAt: IsNull() },
+    });
+  }
+
+  async setPasswordResetToken(
+    id: string,
+    token: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.users.update(
+      { id },
+      {
+        passwordResetToken: token,
+        passwordResetTokenExpiresAt: expiresAt,
+      },
+    );
+  }
+
+  async clearPasswordResetToken(id: string): Promise<void> {
+    await this.users.update(
+      { id },
+      {
+        passwordResetToken: null,
+        passwordResetTokenExpiresAt: null,
+      },
+    );
+  }
+
   async create(input: {
     email: string;
     passwordHash?: string | null;
@@ -93,7 +123,8 @@ export class UsersService {
       displayName: input.displayName ?? null,
       avatarUrl: input.avatarUrl ?? null,
       role: USER_ROLES.CONTRIBUTOR,
-      accessStatus: 'invited',
+      // Same gate as email/password sign-up: no portal access until review.
+      accessStatus: 'pending_review',
     });
   }
 
