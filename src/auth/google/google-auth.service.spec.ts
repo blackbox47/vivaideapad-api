@@ -8,6 +8,7 @@ import {
 import { UsersService } from '../../users/users.service';
 import { User, USER_ROLES } from '../../users/entities/user.entity';
 import { AuthService } from '../auth.service';
+import { MAILER_SERVICE } from '../mailer/mailer.service';
 import { GoogleAuthService, GOOGLE_OAUTH_CLIENT } from './google-auth.service';
 
 import { MAILER_SERVICE } from '../mailer/mailer.service';
@@ -19,12 +20,13 @@ describe('GoogleAuthService', () => {
     findByEmail: jest.Mock;
     createGoogleIdentity: jest.Mock;
     setGoogleId: jest.Mock;
+    setVerificationToken: jest.Mock;
   };
   let mockAuthService: {
     signInForExistingUser: jest.Mock;
   };
-  let mockMailerService: {
-    sendMail: jest.Mock;
+  let mockMailer: {
+    sendVerificationLink: jest.Mock;
   };
 
   const mockTokens = {
@@ -34,7 +36,7 @@ describe('GoogleAuthService', () => {
       display_name: 'Creator Name',
       avatar_url: 'https://example.com/avatar.jpg',
       role: USER_ROLES.CONTRIBUTOR,
-      access_status: 'invited',
+      access_status: 'active',
     },
   };
 
@@ -47,14 +49,15 @@ describe('GoogleAuthService', () => {
       findByEmail: jest.fn(),
       createGoogleIdentity: jest.fn(),
       setGoogleId: jest.fn(),
+      setVerificationToken: jest.fn().mockResolvedValue(undefined),
     };
 
     mockAuthService = {
       signInForExistingUser: jest.fn().mockResolvedValue(mockTokens),
     };
 
-    mockMailerService = {
-      sendMail: jest.fn().mockResolvedValue(true),
+    mockMailer = {
+      sendVerificationLink: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -82,13 +85,17 @@ describe('GoogleAuthService', () => {
           provide: GOOGLE_OAUTH_CLIENT,
           useValue: mockOAuthClient,
         },
+        {
+          provide: MAILER_SERVICE,
+          useValue: mockMailer,
+        },
       ],
     }).compile();
 
     service = module.get<GoogleAuthService>(GoogleAuthService);
   });
 
-  it('should sign in a new creator user successfully', async () => {
+  it('should create a pending_review user on first Google identity, email verify link, and block sign-in', async () => {
     mockOAuthClient.verifyIdToken.mockResolvedValue({
       getPayload: () => ({
         sub: 'google-sub-1',
@@ -107,26 +114,124 @@ describe('GoogleAuthService', () => {
       displayName: 'Creator Name',
       avatarUrl: 'https://example.com/avatar.jpg',
       role: USER_ROLES.CONTRIBUTOR,
-      accessStatus: 'invited',
+      accessStatus: 'pending_review',
     };
     mockUsersService.createGoogleIdentity.mockResolvedValue(newUser);
 
-    const result = await service.signIn({ credential: 'valid-token' });
+    try {
+      await service.signIn({ credential: 'valid-token' });
+      fail('Expected to throw ApiException');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ApiException);
+      const apiErr = err as ApiException;
+      expect(apiErr.getStatus()).toBe(403);
+      const res = apiErr.getResponse() as ApiErrorBody;
+      expect(res.error).toEqual(
+        expect.objectContaining({ code: 'account_pending_review' }),
+      );
+    }
 
-    expect(mockUsersService.findByEmail).toHaveBeenCalledWith(
-      'creator@example.com',
-    );
     expect(mockUsersService.createGoogleIdentity).toHaveBeenCalledWith({
       email: 'creator@example.com',
       googleId: 'google-sub-1',
       displayName: 'Creator Name',
       avatarUrl: 'https://example.com/avatar.jpg',
     });
-    expect(mockAuthService.signInForExistingUser).toHaveBeenCalledWith(
-      newUser,
-      undefined,
+    expect(mockUsersService.setVerificationToken).toHaveBeenCalledWith(
+      'u-new',
+      expect.any(String),
+      expect.any(Date),
     );
-    expect(result).toEqual(mockTokens);
+    expect(mockMailer.sendVerificationLink).toHaveBeenCalledWith({
+      email: 'creator@example.com',
+      displayName: 'Creator Name',
+      token: expect.any(String),
+    });
+    expect(mockAuthService.signInForExistingUser).not.toHaveBeenCalled();
+  });
+
+  it('should sign up a new Google user as pending_review and email a verification link', async () => {
+    mockOAuthClient.verifyIdToken.mockResolvedValue({
+      getPayload: () => ({
+        sub: 'google-sub-1',
+        email: 'creator@example.com',
+        email_verified: true,
+        name: 'Creator Name',
+        picture: 'https://example.com/avatar.jpg',
+      }),
+    });
+    mockUsersService.findByEmail.mockResolvedValue(null);
+
+    const newUser: Partial<User> = {
+      id: 'u-new',
+      email: 'creator@example.com',
+      googleId: 'google-sub-1',
+      displayName: 'Creator Name',
+      avatarUrl: 'https://example.com/avatar.jpg',
+      role: USER_ROLES.CONTRIBUTOR,
+      accessStatus: 'pending_review',
+    };
+    mockUsersService.createGoogleIdentity.mockResolvedValue(newUser);
+
+    const result = await service.signUp({ credential: 'valid-token' });
+
+    expect(result).toEqual({ email: 'creator@example.com' });
+    expect(mockUsersService.setVerificationToken).toHaveBeenCalledWith(
+      'u-new',
+      expect.any(String),
+      expect.any(Date),
+    );
+    expect(mockMailer.sendVerificationLink).toHaveBeenCalledWith({
+      email: 'creator@example.com',
+      displayName: 'Creator Name',
+      token: expect.any(String),
+    });
+    expect(mockAuthService.signInForExistingUser).not.toHaveBeenCalled();
+  });
+
+  it('should reject Google sign-in for an existing pending_review user and re-send the verify link', async () => {
+    mockOAuthClient.verifyIdToken.mockResolvedValue({
+      getPayload: () => ({
+        sub: 'google-sub-pending',
+        email: 'pending@example.com',
+        email_verified: true,
+      }),
+    });
+
+    const pendingUser: Partial<User> = {
+      id: 'u-pending',
+      email: 'pending@example.com',
+      displayName: 'Pending User',
+      googleId: 'google-sub-pending',
+      role: USER_ROLES.CONTRIBUTOR,
+      accessStatus: 'pending_review',
+    };
+    mockUsersService.findByEmail.mockResolvedValue(pendingUser);
+
+    try {
+      await service.signIn({ credential: 'valid-token' });
+      fail('Expected to throw ApiException');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ApiException);
+      const apiErr = err as ApiException;
+      expect(apiErr.getStatus()).toBe(403);
+      expect((apiErr.getResponse() as ApiErrorBody).error.code).toBe(
+        'account_pending_review',
+      );
+    }
+
+    expect(mockUsersService.createGoogleIdentity).not.toHaveBeenCalled();
+    expect(mockUsersService.setVerificationToken).toHaveBeenCalledWith(
+      'u-pending',
+      expect.any(String),
+      expect.any(Date),
+    );
+    expect(mockMailer.sendVerificationLink).toHaveBeenCalledWith({
+      email: 'pending@example.com',
+      displayName: 'Pending User',
+      token: expect.any(String),
+    });
+    expect(mockAuthService.signInForExistingUser).not.toHaveBeenCalled();
   });
 
   it('should auto-link existing creator account when googleId is null', async () => {

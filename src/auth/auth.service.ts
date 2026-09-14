@@ -37,6 +37,8 @@ export interface AuthTokens {
 }
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+/** Password reset links expire faster than sign-up verification. */
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -121,6 +123,7 @@ export class AuthService {
       return created;
     });
 
+    // Same /verify-email link as Google sign-up (see ConsoleMailerService).
     await this.mailer.sendVerificationLink({
       email,
       displayName: user.displayName,
@@ -169,7 +172,7 @@ export class AuthService {
     if (user.accessStatus === 'pending_review') {
       throw ApiException.forbidden(
         'account_pending_review',
-        'Your account is awaiting review. Please check your email for next steps.',
+        'Your account is awaiting review. Check your email for the link to submit your idea, then wait for admin approval before signing in.',
       );
     }
     return this.issueTokens(user, ua);
@@ -289,23 +292,45 @@ export class AuthService {
     );
   }
 
+  /**
+   * Always resolves without revealing whether the email exists.
+   * Only password-based accounts receive a reset link (Google-only skipped).
+   */
   async forgotPassword(email: string): Promise<void> {
-    // v1 stub: just acknowledge. Production should email a signed reset token.
     const user = await this.users.findByEmail(email);
-    if (user) {
-      const token = randomBytes(24).toString('hex');
-
-      console.log(
-        `[auth.forgotPassword] would email reset link to ${user.email} token=${token}`,
-      );
+    if (!user?.passwordHash) {
+      return;
     }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+    await this.users.setPasswordResetToken(user.id, token, expiresAt);
+    await this.mailer.sendPasswordResetLink({
+      email: user.email,
+      displayName: user.displayName,
+      token,
+    });
   }
 
-  async resetPassword(_token: string, _newPassword: string): Promise<void> {
-    // v1 stub: production would validate a stored reset token.
-    void _token;
-    void _newPassword;
-    await Promise.resolve();
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const user = await this.users.findByPasswordResetToken(token);
+    if (
+      !user ||
+      !user.passwordResetTokenExpiresAt ||
+      user.passwordResetTokenExpiresAt.getTime() < Date.now()
+    ) {
+      throw ApiException.validation(
+        'This reset link is invalid or has expired. Request a new one.',
+      );
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await this.users.setPasswordHash(user.id, newHash);
+    await this.users.clearPasswordResetToken(user.id);
+    await this.refreshTokens.update(
+      { userId: user.id, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
   }
 
   // ------------------------------------------------------------------

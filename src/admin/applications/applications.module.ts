@@ -7,10 +7,12 @@ import { AuditEventsModule } from '../audit-events/audit-events.module';
 import { Category } from '../categories/category.entity';
 import { Concept } from '../concepts/concept.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MailerModule } from '../../auth/mailer/mailer.module';
 import { Application } from './application.entity';
 import { ApplicationsService } from './applications.service';
 import { AdminApplicationsController } from './admin-applications.controller';
 import { PublicApplicationsController } from '../../public/applications.controller';
+import { PublicVerifyEmailController } from '../../public/verify-email.controller';
 
 @Module({
   imports: [
@@ -18,8 +20,13 @@ import { PublicApplicationsController } from '../../public/applications.controll
     UsersModule,
     AuditEventsModule,
     NotificationsModule,
+    MailerModule,
   ],
-  controllers: [AdminApplicationsController, PublicApplicationsController],
+  controllers: [
+    AdminApplicationsController,
+    PublicApplicationsController,
+    PublicVerifyEmailController,
+  ],
   providers: [ApplicationsService],
   exports: [ApplicationsService],
 })

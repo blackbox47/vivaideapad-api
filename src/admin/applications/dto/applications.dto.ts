@@ -7,6 +7,7 @@ export const ApplicationSchema = z.object({
   id: z.uuid(),
   user_id: z.uuid(),
   category_id: z.uuid(),
+  concept_id: z.uuid().nullable().optional(),
   idea_title: z.string(),
   idea_description: z.string(),
   attachments: z.record(z.string(), z.unknown()).nullable(),
@@ -33,6 +34,31 @@ export const PublicApplicationCreateSchema = z.object({
 });
 export class PublicCreateApplicationDto extends createZodDto(
   PublicApplicationCreateSchema,
+) {}
+
+/** Query for GET /public/verify-email — token from the sign-up email link. */
+export const VerifyEmailTokenQuerySchema = z.object({
+  token: z.string().min(1).max(128),
+});
+export class VerifyEmailTokenQueryDto extends createZodDto(
+  VerifyEmailTokenQuerySchema,
+) {}
+
+/**
+ * Body for POST /public/verify-email/application.
+ * Identity comes from the verification token (not from email fields).
+ * `concept_id` must be a published onboarding topic; category is derived server-side.
+ */
+export const VerifyEmailApplicationCreateSchema = z.object({
+  token: z.string().min(1).max(128),
+  concept_id: z.uuid(),
+  idea_title: z.string().min(1).max(255),
+  idea_summary: z.string().max(240).optional(),
+  idea_description: z.string().min(1).max(20000),
+  consent: z.boolean().refine((v) => v === true, 'Consent is required'),
+});
+export class VerifyEmailApplicationCreateDto extends createZodDto(
+  VerifyEmailApplicationCreateSchema,
 ) {}
 
 export const DecisionSchema = z

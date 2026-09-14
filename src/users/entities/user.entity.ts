@@ -66,6 +66,9 @@ export type AccessStatus = (typeof ACCESS_STATUSES)[number];
 @Index('idx_users_email', ['email'], { unique: true })
 @Index('idx_users_role', ['role'])
 @Index('idx_users_google_id', ['googleId'], { unique: true })
+@Index('uq_users_password_reset_token', ['passwordResetToken'], {
+  unique: true,
+})
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -126,6 +129,21 @@ export class User {
     name: 'verification_token_expires_at',
   })
   verificationTokenExpiresAt!: Date | null;
+
+  @Column({
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    name: 'password_reset_token',
+  })
+  passwordResetToken!: string | null;
+
+  @Column({
+    type: 'datetime',
+    nullable: true,
+    name: 'password_reset_token_expires_at',
+  })
+  passwordResetTokenExpiresAt!: Date | null;
 
   @CreateDateColumn({
     type: 'datetime',

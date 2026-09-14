@@ -55,6 +55,9 @@ export const EnvSchema = z.object({
   ACCESS_COOKIE_NAME: z.string().default('vivaideapad.access'),
   REFRESH_COOKIE_NAME: z.string().default('vivaideapad.refresh'),
   SESSION_COOKIE_NAME: z.string().default('vivaideapad.session'),
+
+  // Public SPA origin for outbound email links (verify-email, etc.).
+  APP_PUBLIC_URL: z.string().url().default('http://localhost:5173'),
 });
 
 export type AppEnv = z.infer<typeof EnvSchema>;
