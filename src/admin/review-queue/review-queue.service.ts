@@ -84,7 +84,10 @@ export class ReviewQueueService {
     const conceptIds = Array.from(new Set(rows.map((r) => r.conceptId)));
     const [userRows, conceptRows] = await Promise.all([
       this.users.find({ where: userIds.map((id) => ({ id })) }),
-      this.concepts.find({ where: conceptIds.map((id) => ({ id })) }),
+      this.concepts.find({
+        where: conceptIds.map((id) => ({ id })),
+        withDeleted: true,
+      }),
     ]);
     const userById = new Map(userRows.map((u) => [u.id, u]));
     const conceptById = new Map(conceptRows.map((c) => [c.id, c]));

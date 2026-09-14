@@ -272,9 +272,14 @@ export class ContributorController {
   @ApiOperation({
     summary: 'List published concepts available to contributors',
   })
-  async listConcepts(@Query() query: ContributorConceptsListQueryDto) {
+  async listConcepts(
+    @Query() query: ContributorConceptsListQueryDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as { sub: string };
     const { page, limit } = parsePagination(query);
-    const { data, total } = await this.concepts.findPublished({
+    const { data, total } = await this.concepts.findPublishedForContributor({
+      userId: user.sub,
       category_id: query.category_id,
       page,
       limit,

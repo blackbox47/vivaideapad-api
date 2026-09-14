@@ -120,6 +120,7 @@ export class SubmissionsService {
       conceptIds.length > 0
         ? await this.conceptRepo.find({
             where: conceptIds.map((id) => ({ id })),
+            withDeleted: true,
           })
         : [];
     const conceptById = new Map(conceptRows.map((c) => [c.id, c.title]));
@@ -139,7 +140,10 @@ export class SubmissionsService {
     });
     if (!found) throw ApiException.notFound('Submission');
     const concept = found.conceptId
-      ? await this.conceptRepo.findOne({ where: { id: found.conceptId } })
+      ? await this.conceptRepo.findOne({
+          where: { id: found.conceptId },
+          withDeleted: true,
+        })
       : null;
     return toSerialized(found, concept?.title);
   }
@@ -149,6 +153,24 @@ export class SubmissionsService {
     input: CreateSubmissionDto,
   ): Promise<SerializedSubmission> {
     const attachments = normalizeAttachments(input.attachments);
+
+    // Reject duplicate submissions on the same topic for the same contributor.
+    // A contributor may only have one active (non-soft-deleted) submission
+    // per concept; they should edit or delete the existing one instead.
+    const existing = await this.repo.findOne({
+      where: {
+        userId,
+        conceptId: input.concept_id,
+        deletedAt: IsNull(),
+      },
+    });
+    if (existing) {
+      throw ApiException.conflict(
+        'already_submitted',
+        'You already have an idea for this topic. Edit your existing submission instead.',
+      );
+    }
+
     const row = this.repo.create({
       userId,
       conceptId: input.concept_id,

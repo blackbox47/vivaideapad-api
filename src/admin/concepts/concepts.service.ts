@@ -4,6 +4,7 @@ import { In, IsNull, Repository } from 'typeorm';
 
 import { ApiException } from '../../common/exceptions/api-exception';
 import { Concept, ConceptStatus } from './concept.entity';
+import { Submission } from '../../contributor/entities/submission.entity';
 import type {
   CreateConceptDto,
   UpdateConceptDto,
@@ -45,6 +46,8 @@ export class ConceptsService {
   constructor(
     @InjectRepository(Concept)
     private readonly repo: Repository<Concept>,
+    @InjectRepository(Submission)
+    private readonly submissionsRepo: Repository<Submission>,
   ) {}
 
   async list(input: {
@@ -86,6 +89,46 @@ export class ConceptsService {
       .createQueryBuilder('c')
       .where('c.deleted_at IS NULL')
       .andWhere('c.status IN (:...st)', { st: ['active', 'published'] });
+    if (input.category_id) {
+      qb.andWhere('c.category_id = :cid', { cid: input.category_id });
+    }
+    qb.orderBy('c.open_date', 'DESC')
+      .addOrderBy('c.created_at', 'DESC')
+      .skip((input.page - 1) * input.limit)
+      .take(input.limit);
+    const [rows, total] = await qb.getManyAndCount();
+    return { data: rows.map(toSerialized), total };
+  }
+
+  /**
+   * Same as `findPublished`, but excludes any concept the given contributor
+   * already has a non-soft-deleted submission for (draft / pending_review /
+   * changes_requested / approved / rejected all count). Used by the
+   * contributor-facing `/contributor/concepts` endpoint so users only see
+   * opportunities they have not yet engaged with.
+   *
+   * The `NOT EXISTS` sub-query is cheap because of the existing
+   * `idx_submissions_concept` + `idx_submissions_user` indexes.
+   */
+  async findPublishedForContributor(input: {
+    userId: string;
+    category_id?: string;
+    page: number;
+    limit: number;
+  }): Promise<{ data: SerializedConcept[]; total: number }> {
+    const qb = this.repo
+      .createQueryBuilder('c')
+      .where('c.deleted_at IS NULL')
+      .andWhere('c.status IN (:...st)', { st: ['active', 'published'] })
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM submissions s
+          WHERE s.concept_id = c.id
+            AND s.user_id = :uid
+            AND s.deleted_at IS NULL
+        )`,
+        { uid: input.userId },
+      );
     if (input.category_id) {
       qb.andWhere('c.category_id = :cid', { cid: input.category_id });
     }

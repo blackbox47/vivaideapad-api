@@ -10,6 +10,8 @@ import { User, USER_ROLES } from '../../users/entities/user.entity';
 import { AuthService } from '../auth.service';
 import { GoogleAuthService, GOOGLE_OAUTH_CLIENT } from './google-auth.service';
 
+import { MAILER_SERVICE } from '../mailer/mailer.service';
+
 describe('GoogleAuthService', () => {
   let service: GoogleAuthService;
   let mockOAuthClient: { verifyIdToken: jest.Mock };
@@ -21,12 +23,11 @@ describe('GoogleAuthService', () => {
   let mockAuthService: {
     signInForExistingUser: jest.Mock;
   };
+  let mockMailerService: {
+    sendMail: jest.Mock;
+  };
 
   const mockTokens = {
-    access_token: 'access-123',
-    refresh_token: 'refresh-123',
-    token_type: 'Bearer' as const,
-    expires_in: 900,
     user: {
       id: 'u-1',
       email: 'creator@example.com',
@@ -52,6 +53,10 @@ describe('GoogleAuthService', () => {
       signInForExistingUser: jest.fn().mockResolvedValue(mockTokens),
     };
 
+    mockMailerService = {
+      sendMail: jest.fn().mockResolvedValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GoogleAuthService,
@@ -62,6 +67,10 @@ describe('GoogleAuthService', () => {
         {
           provide: AuthService,
           useValue: mockAuthService,
+        },
+        {
+          provide: MAILER_SERVICE,
+          useValue: mockMailerService,
         },
         {
           provide: ConfigService,
